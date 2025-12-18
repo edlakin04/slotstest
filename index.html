@@ -509,12 +509,24 @@ function setConnected(pubkey){
 }
 
 /** -----------------------------
- * DESKTOP SILENT RECONNECT (ADDED)
+ * DESKTOP SILENT RECONNECT (SESSION ONLY)
+ * - Refresh = silent reconnect
+ * - Close tab/reopen = must click connect again
  * ----------------------------- */
+const SILENT_FLAG_KEY = "SLOTS_CAN_SILENT";
+
+function markSilentAllowedThisTab(){
+  try { sessionStorage.setItem(SILENT_FLAG_KEY, "1"); } catch(_e){}
+}
+function canSilentThisTab(){
+  try { return sessionStorage.getItem(SILENT_FLAG_KEY) === "1"; } catch(_e){ return false; }
+}
+
 async function trySilentReconnect(){
-  // Only works for injected Phantom extension on desktop.
-  // No popup; only reconnects if the user already trusted this site.
+  // Only attempt silent reconnect if user already connected in THIS TAB session.
+  if(!canSilentThisTab()) return;
   if (!(window.solana && window.solana.isPhantom)) return;
+
   try{
     const resp = await window.solana.connect({ onlyIfTrusted: true });
     if(resp && resp.publicKey){
@@ -523,7 +535,7 @@ async function trySilentReconnect(){
       await refreshSol();
     }
   }catch(_e){
-    // Normal: not trusted yet or Phantom doesn't allow silent reconnect in this context.
+    // Normal: not trusted yet or Phantom doesn't allow silent reconnect here.
   }
 }
 
@@ -627,6 +639,10 @@ async function connectWallet(){
       const resp = await window.solana.connect();
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
+
+      // Allow silent reconnect ONLY for refreshes within this same tab session
+      markSilentAllowedThisTab();
+
       await refreshSol();
       return;
     }catch(err){
@@ -1056,7 +1072,7 @@ function renderPriceGraphSvg(history){
   render();
   startSim();
   handlePhantomMobileRedirect();
-  // Desktop silent reconnect (no popup). Works only if Phantom already trusted this site.
+  // Desktop silent reconnect only if user connected earlier in THIS TAB session.
   trySilentReconnect();
 })();
 </script>

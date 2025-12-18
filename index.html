@@ -508,6 +508,25 @@ function setConnected(pubkey){
   renderTop();
 }
 
+/** -----------------------------
+ * DESKTOP SILENT RECONNECT (ADDED)
+ * ----------------------------- */
+async function trySilentReconnect(){
+  // Only works for injected Phantom extension on desktop.
+  // No popup; only reconnects if the user already trusted this site.
+  if (!(window.solana && window.solana.isPhantom)) return;
+  try{
+    const resp = await window.solana.connect({ onlyIfTrusted: true });
+    if(resp && resp.publicKey){
+      const pubkey = resp.publicKey.toString();
+      setConnected(pubkey);
+      await refreshSol();
+    }
+  }catch(_e){
+    // Normal: not trusted yet or Phantom doesn't allow silent reconnect in this context.
+  }
+}
+
 function clearMobileLinkParams(){
   const url = new URL(window.location.href);
   ["phantom_encryption_public_key","nonce","data","errorCode","errorMessage","state","_phantom","_t"].forEach(k => url.searchParams.delete(k));
@@ -1037,6 +1056,8 @@ function renderPriceGraphSvg(history){
   render();
   startSim();
   handlePhantomMobileRedirect();
+  // Desktop silent reconnect (no popup). Works only if Phantom already trusted this site.
+  trySilentReconnect();
 })();
 </script>
 </body>

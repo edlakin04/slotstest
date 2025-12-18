@@ -30,7 +30,7 @@ Expires: ${expiresAt.toISOString()}`;
     const p = getPool();
     await p.query(
       "INSERT INTO auth_nonces (nonce, wallet, message, expires_at, used) VALUES ($1,$2,$3,$4,false)",
-      [nonce, wallet, message, expiresAt.toISOString()]
+      [nonce, wallet, message, expiresAt] // pass Date
     );
 
     res.status(200).json({ nonce, message, expiresAt: expiresAt.toISOString() });

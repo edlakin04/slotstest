@@ -1,0 +1,922 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Slots</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#0f1622;
+      --panel2:#0c111a;
+      --border:rgba(255,255,255,.08);
+      --text:#e7eefc;
+      --muted:rgba(231,238,252,.65);
+      --accent:#7c3aed;
+      --accent2:#22d3ee;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --warn:#f59e0b;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+      --radius2: 22px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      background:
+        radial-gradient(1200px 700px at 20% 0%, rgba(124,58,237,.18), transparent 50%),
+        radial-gradient(1000px 600px at 90% 10%, rgba(34,211,238,.12), transparent 55%),
+        var(--bg);
+      color: var(--text);
+    }
+    button{ font-family:inherit; }
+    .wrap{ max-width:1200px; margin:0 auto; padding: 18px 16px 32px; }
+
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap: 12px;
+      padding: 16px;
+      background: rgba(15,22,34,.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 10px;
+      z-index: 10;
+    }
+    .brand{ display:flex; align-items:center; gap:12px; cursor:pointer; }
+    .logo{
+      width: 42px; height: 42px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 8px 25px rgba(124,58,237,.25);
+      position: relative;
+      overflow:hidden;
+    }
+    .logo:after{
+      content:"";
+      position:absolute; inset:-40%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.22), transparent 45%);
+      transform: rotate(20deg);
+    }
+    .brand h1{ margin:0; font-size: 20px; letter-spacing:.4px; }
+    .brand .sub{ margin-top:2px; font-size:12px; color: var(--muted); }
+
+    .right{ display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+    .statbar{
+      display:flex; gap:10px; align-items:center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border:1px solid var(--border);
+      background: rgba(12,17,26,.7);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .statbar b{ color: var(--text); font-weight: 800; font-family: var(--mono); }
+
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:10px;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(12,17,26,.7);
+      color: var(--text);
+      cursor:pointer;
+      transition: transform .06s ease, background .2s ease, border-color .2s ease;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.16); }
+    .btn.primary{
+      background: linear-gradient(135deg, rgba(124,58,237,.85), rgba(34,211,238,.55));
+      border-color: rgba(124,58,237,.35);
+    }
+    .btn:disabled{ opacity:.45; cursor:not-allowed; transform:none !important; }
+
+    .subbar{
+      margin-top: 14px;
+      padding: 12px;
+      background: rgba(15,22,34,.55);
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      box-shadow: var(--shadow);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .tabs{ display:flex; gap:8px; align-items:center; }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(12,17,26,.7);
+      color: var(--muted);
+      cursor: pointer;
+      user-select:none;
+      transition: transform .06s ease, background .2s ease, border-color .2s ease, color .2s ease;
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .pill:hover{ transform: translateY(-1px); color: var(--text); border-color: rgba(255,255,255,.14); }
+    .pill.active{
+      background: linear-gradient(135deg, rgba(124,58,237,.18), rgba(34,211,238,.12));
+      border-color: rgba(124,58,237,.35);
+      color: var(--text);
+    }
+    .subActions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .hint{ color: var(--muted); font-size: 13px; }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (max-width: 1100px){ .grid{ grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 820px){ .grid{ grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px){ .grid{ grid-template-columns: 1fr; } }
+
+    .card{
+      background: rgba(15,22,34,.72);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height: 250px;
+      transition: transform .08s ease, border-color .2s ease;
+      cursor:pointer;
+    }
+    .card:hover{ transform: translateY(-2px); border-color: rgba(255,255,255,.16); }
+
+    .thumb{
+      height: 120px;
+      background: linear-gradient(135deg, rgba(124,58,237,.28), rgba(34,211,238,.14));
+      border-bottom: 1px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      position: relative;
+    }
+    .thumb .ph{
+      width: 62px; height: 62px; border-radius: 18px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 900;
+      letter-spacing: .8px;
+      color: rgba(231,238,252,.75);
+    }
+    .badge{
+      position:absolute;
+      top: 10px; left: 10px;
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(12,17,26,.62);
+      color: var(--text);
+      backdrop-filter: blur(8px);
+    }
+    .badge.locked{ border-color: rgba(245,158,11,.28); color: #ffe7c2; background: rgba(245,158,11,.10); }
+    .badge.unlocked{ border-color: rgba(34,197,94,.26); color: #d4ffdf; background: rgba(34,197,94,.10); }
+
+    .cardbody{
+      padding: 12px;
+      display:flex; flex-direction:column; gap: 8px;
+      flex: 1;
+    }
+    .name{
+      font-weight: 900;
+      letter-spacing: .2px;
+      font-size: 14px;
+      line-height: 1.15;
+      display:flex; align-items:center; justify-content:space-between; gap: 8px;
+    }
+    .meta{
+      display:flex; justify-content:space-between; align-items:center; gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .price{
+      font-family: var(--mono);
+      font-weight: 900;
+      color: var(--text);
+    }
+    .votes{
+      display:flex; gap: 8px; align-items:center; flex-wrap:wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chip{
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(12,17,26,.60);
+    }
+    .chip .up{ color: rgba(34,197,94,.95); font-weight: 900; }
+    .chip .down{ color: rgba(239,68,68,.95); font-weight: 900; }
+    .chip .net{ color: rgba(231,238,252,.85); font-weight: 900; }
+
+    .actions{ display:flex; gap: 8px; margin-top:auto; }
+    .mini{
+      flex: 1;
+      padding: 9px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(12,17,26,.55);
+      color: var(--text);
+      cursor:pointer;
+      transition: transform .06s ease, border-color .2s ease;
+    }
+    .mini:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.18); }
+    .mini.up{ border-color: rgba(34,197,94,.22); }
+    .mini.down{ border-color: rgba(239,68,68,.22); }
+    .mini.buy{ opacity:.45; cursor:not-allowed; }
+
+    .detail{
+      margin-top: 14px;
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap: 14px;
+    }
+    @media (max-width: 900px){ .detail{ grid-template-columns: 1fr; } }
+
+    .panel{
+      background: rgba(15,22,34,.72);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .panelHead{
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      display:flex; align-items:flex-start; justify-content:space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .panelHead h2{ margin:0; font-size: 18px; letter-spacing:.2px; }
+    .panelHead .sub{ margin-top:4px; font-size:12px; color: var(--muted); font-family: var(--mono); }
+    .panelBody{ padding: 14px; }
+
+    .bigThumb{
+      height: 220px;
+      background: linear-gradient(135deg, rgba(124,58,237,.28), rgba(34,211,238,.14));
+      border-bottom: 1px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      position: relative;
+    }
+    .bigThumb .ph{
+      width: 96px; height: 96px; border-radius: 26px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: rgba(231,238,252,.75);
+      font-size: 24px;
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .kv .box{
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(12,17,26,.55);
+    }
+    .kv .label{ font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:900; }
+    .kv .value{ font-family: var(--mono); font-weight: 900; font-size: 14px; }
+
+    .list{
+      display:flex; flex-direction:column; gap: 8px;
+      max-height: 340px;
+      overflow:auto;
+      padding-right: 4px;
+    }
+    .row{
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(12,17,26,.55);
+      display:flex; justify-content:space-between; align-items:center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .row b{ color: var(--text); }
+    .row .tagUp{ color: rgba(34,197,94,.95); font-weight: 900; }
+    .row .tagDown{ color: rgba(239,68,68,.95); font-weight: 900; }
+
+    .graphWrap{
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(12,17,26,.55);
+    }
+    .graphTitle{ font-weight:900; margin-bottom:8px; }
+    svg{ display:block; width:100%; height:140px; }
+
+    .note{ color: var(--muted); font-size: 12px; margin-top: 10px; line-height:1.4; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand" onclick="goHome()">
+        <div class="logo"></div>
+        <div>
+          <h1>Slots</h1>
+          <div class="sub">Prototype (Phantom connect • SOL balance)</div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="statbar" id="walletBar">
+          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b>
+        </div>
+        <button class="btn primary" id="btnConnect" onclick="connectPhantom()">Connect wallet</button>
+      </div>
+    </div>
+
+    <div class="subbar">
+      <div class="tabs">
+        <div class="pill active" id="tabTrending" onclick="setView('trending', event)">Trending</div>
+        <div class="pill" id="tabNew" onclick="setView('new', event)">New</div>
+      </div>
+
+      <div class="subActions">
+        <button class="btn" id="btnCreate" onclick="openCreateModal(event)" disabled>Create slot</button>
+        <button class="btn" id="btnMy" onclick="setView('my', event)" disabled>My slots</button>
+      </div>
+    </div>
+
+    <div class="content" id="content"></div>
+  </div>
+
+<script>
+/** -----------------------------
+ * State
+ * ----------------------------- */
+const state = {
+  view: 'trending',
+  selectedId: null,
+
+  wallet: {
+    connected: false,
+    pubkey: null,
+    sol: null
+  },
+
+  // Hidden price model:
+  // - No decay over time
+  // - Vote impact weighted by time since last vote
+  model: {
+    floorUSD: 5,
+    p: 1.50,
+    k: 0.0315,
+    refSec: 1.0,
+    beta: 0.50,
+    wMin: 0.20,
+    wMax: 3.00
+  },
+
+  slots: [],
+  sim: { tickMs: 250 }
+};
+
+function now(){ return Date.now(); }
+function fmtMoney(n){
+  const x = Math.max(0, n || 0);
+  return '$' + x.toFixed(x >= 1000 ? 0 : (x >= 100 ? 1 : 2));
+}
+function fmtSol(n){
+  if(n === null || n === undefined) return '—';
+  return (Math.round(n * 1000) / 1000).toFixed(3);
+}
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function randHex(len){
+  const chars = 'abcdef0123456789';
+  let s='';
+  for(let i=0;i<len;i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
+}
+function shortAddr(a){ return a ? (a.slice(0,4) + '…' + a.slice(-4)) : '—'; }
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[m]));
+}
+
+/** -----------------------------
+ * Solana RPC (no libs)
+ * ----------------------------- */
+const RPC_URL = "https://api.mainnet-beta.solana.com";
+
+async function solanaRpc(method, params){
+  const res = await fetch(RPC_URL, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ jsonrpc:"2.0", id:1, method, params })
+  });
+  const json = await res.json();
+  if(json.error) throw new Error(json.error.message || "RPC error");
+  return json.result;
+}
+
+async function fetchSolBalance(pubkey){
+  // returns SOL number
+  const result = await solanaRpc("getBalance", [pubkey, { commitment: "confirmed" }]);
+  const lamports = result?.value ?? 0;
+  return lamports / 1_000_000_000;
+}
+
+/** -----------------------------
+ * Phantom connect
+ * ----------------------------- */
+async function connectPhantom(){
+  try{
+    if(!window.solana || !window.solana.isPhantom){
+      alert("Phantom not found. Install Phantom extension, then refresh.");
+      return;
+    }
+    const resp = await window.solana.connect();
+    const pubkey = resp.publicKey.toString();
+
+    state.wallet.connected = true;
+    state.wallet.pubkey = pubkey;
+
+    document.getElementById("btnConnect").textContent = "Wallet connected";
+    document.getElementById("btnConnect").disabled = true;
+    document.getElementById("btnCreate").disabled = false;
+    document.getElementById("btnMy").disabled = false;
+
+    renderTop();
+
+    // Fetch SOL balance
+    const sol = await fetchSolBalance(pubkey);
+    state.wallet.sol = sol;
+    renderTop();
+  }catch(err){
+    console.error(err);
+    alert("Wallet connection failed.");
+  }
+}
+
+function renderTop(){
+  document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
+  document.getElementById('walletSol').textContent = state.wallet.connected ? fmtSol(state.wallet.sol) : '—';
+}
+
+/** -----------------------------
+ * Slot generation
+ * ----------------------------- */
+const nameA = ["Neon","Turbo","Ghost","Violet","Chrome","Solar","Apex","Shadow","Feral","Nova","Glitch","Pixel","Hyper","Omega","Void","Mint","Lunar","Prism","Rogue","Flux"];
+const nameB = ["Trump","Wizard","Monkey","Whale","Cat","Pepe","Rocket","Goblin","Knight","Alien","Dragon","Degen","Reaper","Angel","Bot","King","Queen","Titan","Hacker","Joker"];
+const nameC = ["Protocol","Poster","Slot","Board","Cannon","Machine","Signal","Hype","Wave","Engine","Temple","Arena","Mint","Market","Scroll","Portal","Gem","Grail","Relay","Index"];
+function makeName(){ return `${randChoice(nameA)} ${randChoice(nameB)} ${randChoice(nameC)}`; }
+
+function newSlot(id, creatorWallet, createdAt){
+  const r = Math.random();
+  let rate;
+  if (r < 0.06) rate = randInt(6, 10);
+  else if (r < 0.20) rate = (Math.random()*3)+2;
+  else if (r < 0.70) rate = (Math.random()*1.8)+0.2;
+  else rate = (Math.random()*0.25)+0.02;
+
+  const locked = Math.random() < 0.22;
+  const lockMs = locked ? randInt(60, 360) * 1000 : 0;
+
+  const startT = createdAt ?? now();
+
+  return {
+    id,
+    name: makeName(),
+    createdAt: startT,
+    creatorWallet: creatorWallet ?? null,
+    ownerWallet: creatorWallet ?? `BOT_${randHex(6)}`,
+    lockedUntil: locked ? (now() + lockMs) : 0,
+
+    votes: [],
+    sales: [],
+    priceHistory: [{ t: startT, priceUSD: 5 }],
+
+    up: 0,
+    down: 0,
+    scoreS: 0,
+    priceUSD: 5,
+    lastVoteAt: startT,
+
+    voteRatePerSec: rate
+  };
+}
+
+function initSlots(){
+  const base = [];
+  for(let i=1;i<=100;i++){
+    const createdAt = now() - randInt(0, 6*60*60*1000);
+    base.push(newSlot(i, null, createdAt));
+  }
+  state.slots = base;
+}
+
+/** -----------------------------
+ * Price model (time-between-votes only)
+ * ----------------------------- */
+function computePriceFromScore(S){
+  const {floorUSD, k, p} = state.model;
+  const x = Math.max(0, S);
+  return Math.max(floorUSD, floorUSD + k * Math.pow(x, p));
+}
+function voteWeightFromDeltaSec(dtSec){
+  const {refSec, beta, wMin, wMax} = state.model;
+  const safe = Math.max(0.05, dtSec);
+  let w = Math.pow(refSec / safe, beta);
+  if(!isFinite(w)) w = wMax;
+  return Math.max(wMin, Math.min(wMax, w));
+}
+function pushPriceHistory(slot, price){
+  const t = now();
+  slot.priceHistory.push({ t, priceUSD: price });
+  if(slot.priceHistory.length > 300){
+    slot.priceHistory.splice(0, slot.priceHistory.length - 300);
+  }
+}
+function isLocked(slot){ return slot.lockedUntil && slot.lockedUntil > now(); }
+
+function applyVote(slot, v, wallet){
+  const t = now();
+  const dtSec = Math.max(0.001, (t - (slot.lastVoteAt || slot.createdAt)) / 1000);
+  const w = voteWeightFromDeltaSec(dtSec);
+
+  slot.lastVoteAt = t;
+  slot.votes.push({ t, wallet, v, w });
+
+  if(v > 0) slot.up++;
+  else slot.down++;
+
+  slot.scoreS += v * w;
+  slot.priceUSD = computePriceFromScore(slot.scoreS);
+  pushPriceHistory(slot, slot.priceUSD);
+}
+
+/** -----------------------------
+ * Actions (no buy logic)
+ * ----------------------------- */
+function castVote(slotId, v, e){
+  if(e) e.stopPropagation();
+  const slot = state.slots.find(s => s.id === slotId);
+  if(!slot) return;
+
+  const w = state.wallet.connected ? state.wallet.pubkey : `BOT_${randHex(6)}`;
+  applyVote(slot, v, w);
+  render(false);
+}
+
+function openCreateModal(e){
+  if(e) e.stopPropagation();
+  if(!state.wallet.connected){
+    alert("Connect Phantom first.");
+    return;
+  }
+  const cost = 20;
+  const ok = confirm(`Create slot (prototype). Cost: $${cost} (not real). Continue?`);
+  if(!ok) return;
+  createSlot();
+}
+
+function createSlot(){
+  const newId = Math.max(...state.slots.map(s=>s.id)) + 1;
+  const slot = newSlot(newId, state.wallet.pubkey, now());
+  slot.creatorWallet = state.wallet.pubkey;
+  slot.ownerWallet = state.wallet.pubkey;
+  slot.priceUSD = 5;
+  slot.scoreS = 0;
+  slot.lockedUntil = now() + 2 * 60 * 1000;
+
+  state.slots.unshift(slot);
+  setView('new');
+  render();
+}
+
+/** -----------------------------
+ * Simulation
+ * ----------------------------- */
+function simTick(){
+  const dtSec = state.sim.tickMs / 1000;
+
+  for(const slot of state.slots){
+    const expected = slot.voteRatePerSec * dtSec;
+    let nVotes = 0;
+
+    if(expected < 0.35){
+      if(Math.random() < expected) nVotes = 1;
+    } else {
+      const whole = Math.floor(expected);
+      const frac = expected - whole;
+      nVotes += whole;
+      if(Math.random() < frac) nVotes += 1;
+      if(Math.random() < Math.min(0.08, expected*0.02)) nVotes += randInt(1,3);
+    }
+
+    for(let i=0;i<nVotes;i++){
+      const v = (Math.random() < 0.56) ? +1 : -1;
+      const w = `BOT_${randHex(6)}`;
+      applyVote(slot, v, w);
+    }
+  }
+
+  render(false);
+}
+let simHandle = null;
+function startSim(){
+  if(simHandle) clearInterval(simHandle);
+  simHandle = setInterval(simTick, state.sim.tickMs);
+}
+
+/** -----------------------------
+ * Views + rendering
+ * ----------------------------- */
+function setView(v, e){
+  if(e) e.stopPropagation();
+  state.view = v;
+  state.selectedId = null;
+
+  document.getElementById('tabTrending').classList.toggle('active', v === 'trending');
+  document.getElementById('tabNew').classList.toggle('active', v === 'new');
+
+  render();
+}
+function goHome(){
+  state.selectedId = null;
+  state.view = 'trending';
+  document.getElementById('tabTrending').classList.add('active');
+  document.getElementById('tabNew').classList.remove('active');
+  render();
+}
+function openDetail(id){
+  state.selectedId = id;
+  state.view = 'detail';
+  render();
+}
+
+function rankSlotsTrending(){
+  return [...state.slots].sort((a,b)=>{
+    if(b.scoreS !== a.scoreS) return b.scoreS - a.scoreS;
+    const nb = (b.up - b.down), na = (a.up - a.down);
+    if(nb !== na) return nb - na;
+    return b.createdAt - a.createdAt;
+  });
+}
+function rankSlotsNew(){
+  return [...state.slots].sort((a,b)=> b.createdAt - a.createdAt);
+}
+function getMySlots(){
+  if(!state.wallet.connected) return [];
+  const w = state.wallet.pubkey;
+  return state.slots.filter(s => s.creatorWallet === w || s.ownerWallet === w)
+    .sort((a,b)=> b.createdAt - a.createdAt);
+}
+
+function render(){
+  const root = document.getElementById('content');
+
+  if(state.selectedId){
+    root.innerHTML = renderDetail(state.selectedId);
+    return;
+  }
+
+  let list = [];
+  if(state.view === 'new') list = rankSlotsNew();
+  else if(state.view === 'my') list = getMySlots();
+  else list = rankSlotsTrending();
+
+  root.innerHTML = `
+    <div class="hint">Showing ${list.length} slots</div>
+    <div class="grid">
+      ${list.map((s, idx)=> renderCard(s, state.view === 'trending' ? (idx+1) : null)).join('')}
+    </div>
+    <div class="note">
+      Buy is disabled in this version (no smart contracts yet).
+    </div>
+  `;
+
+  for(const s of list){
+    const el = document.getElementById(`card_${s.id}`);
+    if(el){
+      el.addEventListener('click', ()=> openDetail(s.id));
+    }
+  }
+}
+
+function renderCard(s, rank){
+  const locked = isLocked(s);
+  const net = s.up - s.down;
+  const badgeCls = locked ? 'locked' : 'unlocked';
+  const badgeText = locked ? 'LOCKED' : 'UNLOCKED';
+  const lockHint = locked ? `• until ${new Date(s.lockedUntil).toLocaleTimeString()}` : '';
+
+  return `
+    <div class="card" id="card_${s.id}">
+      <div class="thumb">
+        <div class="badge ${badgeCls}">${badgeText} ${lockHint}</div>
+        <div class="ph">S${s.id}</div>
+      </div>
+      <div class="cardbody">
+        <div class="name">
+          <span>${escapeHtml(s.name)}</span>
+          ${rank ? `<span style="color:var(--muted); font-family:var(--mono); font-size:12px;">#${rank}</span>` : ``}
+        </div>
+
+        <div class="meta">
+          <div>Owner: <span style="font-family:var(--mono)">${escapeHtml(shortAddr(s.ownerWallet.startsWith('BOT_') ? 'So1a1111111111111111111111111111111111111' : s.ownerWallet))}</span></div>
+          <div class="price">${fmtMoney(s.priceUSD)}</div>
+        </div>
+
+        <div class="votes">
+          <span class="chip"><span class="up">▲</span> ${s.up}</span>
+          <span class="chip"><span class="down">▼</span> ${s.down}</span>
+          <span class="chip"><span class="net">Net</span> ${net}</span>
+        </div>
+
+        <div class="actions">
+          <button class="mini up" onclick="castVote(${s.id}, +1, event)">▲ Up</button>
+          <button class="mini down" onclick="castVote(${s.id}, -1, event)">▼ Down</button>
+          <button class="mini buy" disabled title="Disabled (no smart contracts yet)">Buy</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDetail(id){
+  const s = state.slots.find(x => x.id === id);
+  if(!s) return `<div class="panel"><div class="panelBody">Slot not found.</div></div>`;
+
+  const locked = isLocked(s);
+  const net = s.up - s.down;
+
+  const votes = [...s.votes].slice(-80).reverse();
+  const sales = [...s.sales].slice(0, 50);
+  const graphSvg = renderPriceGraphSvg(s.priceHistory);
+
+  return `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <button class="btn" onclick="goHome()">← Back</button>
+      <div class="statbar">
+        Slot <b>#${s.id}</b> • ${locked ? '<b style="color:#ffe7c2;">Locked</b>' : '<b style="color:#d4ffdf;">Unlocked</b>'}
+        ${locked ? `• ends ${new Date(s.lockedUntil).toLocaleTimeString()}` : ''}
+      </div>
+    </div>
+
+    <div class="detail">
+      <div class="panel">
+        <div class="bigThumb">
+          <div class="badge ${locked ? 'locked' : 'unlocked'}">${locked ? 'LOCKED' : 'UNLOCKED'}</div>
+          <div class="ph">S${s.id}</div>
+        </div>
+
+        <div class="panelHead">
+          <div>
+            <h2>${escapeHtml(s.name)}</h2>
+            <div class="sub">Created: ${new Date(s.createdAt).toLocaleString()}</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button class="btn" onclick="castVote(${s.id}, +1, event)">▲ Upvote</button>
+            <button class="btn" style="background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.25);" onclick="castVote(${s.id}, -1, event)">▼ Downvote</button>
+            <button class="btn" disabled title="Disabled (no smart contracts yet)">Buy</button>
+          </div>
+        </div>
+
+        <div class="panelBody">
+          <div class="kv">
+            <div class="box">
+              <div class="label">Current price</div>
+              <div class="value">${fmtMoney(s.priceUSD)}</div>
+            </div>
+            <div class="box">
+              <div class="label">Votes</div>
+              <div class="value">▲ ${s.up}  ▼ ${s.down}  • Net ${net}</div>
+            </div>
+          </div>
+
+          <div class="graphWrap">
+            <div class="graphTitle">Price history</div>
+            ${graphSvg}
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+                <div style="font-weight:900;">Recent votes</div>
+                <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, s.votes.length)})</div>
+              </div>
+              <div class="list">
+                ${votes.length ? votes.map(v=>`
+                  <div class="row">
+                    <div><b style="font-family:var(--mono)">${escapeHtml(shortAddr(v.wallet))}</b></div>
+                    <div>${new Date(v.t).toLocaleTimeString()} • <span class="${v.v>0?'tagUp':'tagDown'}">${v.v>0?'▲ UP':'▼ DOWN'}</span></div>
+                  </div>
+                `).join('') : `<div class="row">No votes yet.</div>`}
+              </div>
+            </div>
+
+            <div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+                <div style="font-weight:900;">Sales history</div>
+                <div style="color:var(--muted); font-size:12px;">(disabled for now)</div>
+              </div>
+              <div class="list">
+                <div class="row">Buy/sales are disabled until smart contracts are added.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelHead">
+          <div>
+            <h2>Notes</h2>
+            <div class="sub">Testing only</div>
+          </div>
+        </div>
+        <div class="panelBody" style="color:var(--muted); font-size:13px; line-height:1.5;">
+          Phantom connect is real. Slots, votes, and prices are still simulated/off-chain.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPriceGraphSvg(history){
+  const data = (history || []).slice(-120);
+  const w = 640, h = 140, pad = 10;
+
+  if(data.length < 2){
+    return `<div style="color:var(--muted); font-size:12px;">Not enough data yet…</div>`;
+  }
+
+  const prices = data.map(d => d.priceUSD);
+  let min = Math.min(...prices);
+  let max = Math.max(...prices);
+  if(max - min < 0.0001){ max = min + 1; }
+
+  const xStep = (w - pad*2) / (data.length - 1);
+  const pts = data.map((d,i)=>{
+    const x = pad + i * xStep;
+    const y = pad + (h - pad*2) * (1 - ((d.priceUSD - min)/(max-min)));
+    return [x,y];
+  });
+
+  const path = pts.map((p,i)=> (i===0?`M ${p[0].toFixed(2)} ${p[1].toFixed(2)}`:`L ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)).join(' ');
+  const last = pts[pts.length-1];
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Price graph">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="rgba(124,58,237,.9)"></stop>
+          <stop offset="100%" stop-color="rgba(34,211,238,.8)"></stop>
+        </linearGradient>
+      </defs>
+      <path d="${path}" fill="none" stroke="url(#g)" stroke-width="3" stroke-linecap="round"></path>
+      <circle cx="${last[0].toFixed(2)}" cy="${last[1].toFixed(2)}" r="4" fill="rgba(231,238,252,.9)"></circle>
+      <text x="${pad}" y="${h-pad}" fill="rgba(231,238,252,.55)" font-size="12" font-family="ui-monospace, monospace">
+        min ${fmtMoney(min)} • max ${fmtMoney(max)}
+      </text>
+    </svg>
+  `;
+}
+
+/** -----------------------------
+ * Boot
+ * ----------------------------- */
+(function boot(){
+  initSlots();
+  renderTop();
+  render();
+  startSim();
+})();
+</script>
+</body>
+</html>

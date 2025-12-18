@@ -277,7 +277,7 @@
 
       <div class="right">
         <div class="statbar" id="walletBar">
-          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b>
+          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b> • SLOTS(fake): <b id="walletFake">—</b>
         </div>
         <button class="btn" id="btnRefresh" onclick="refreshSol()" disabled>Refresh SOL</button>
         <button class="btn primary" id="btnConnect" onclick="connectWallet()">Connect wallet</button>
@@ -310,7 +310,8 @@ const state = {
   wallet: {
     connected: false,
     pubkey: null,
-    sol: null
+    sol: null,
+    fake: null
   },
 
   model: {
@@ -335,6 +336,12 @@ function fmtMoney(n){
 function fmtSol(n){
   if(n === null || n === undefined) return '—';
   return (Math.round(n * 1000) / 1000).toFixed(3);
+}
+function fmtFake(n){
+  if(n === null || n === undefined) return '—';
+  const x = Number(n);
+  if(!isFinite(x)) return '—';
+  return x.toFixed(2);
 }
 function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
 function randChoice(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
@@ -488,6 +495,77 @@ async function refreshSol(){
 }
 
 /** -----------------------------
+ * Backend login + fake balance
+ * ----------------------------- */
+async function refreshBackendUser(){
+  try{
+    const r = await fetch("/api/me2", { credentials: "include" });
+    const me = await r.json();
+    if(me && me.ok && me.user){
+      state.wallet.fake = me.user.fake_balance;
+    } else {
+      state.wallet.fake = null;
+    }
+    renderTop();
+  }catch(_e){
+    state.wallet.fake = null;
+    renderTop();
+  }
+}
+
+async function loginToBackend(){
+  if(!state.wallet.connected || !state.wallet.pubkey){
+    return;
+  }
+
+  // If already logged in (cookie exists), just refresh user
+  await refreshBackendUser();
+  if(state.wallet.fake !== null && state.wallet.fake !== undefined) return;
+
+  // Desktop Phantom required for signMessage in this prototype
+  if(!(window.solana && window.solana.isPhantom)){
+    // Mobile signMessage via universal link can be added later; keep this safe/simple for now.
+    return;
+  }
+
+  // 1) challenge
+  const chRes = await fetch("/api/auth/challenge", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ wallet: state.wallet.pubkey })
+  });
+  const ch = await chRes.json();
+  if(ch.error){
+    console.warn("challenge error:", ch);
+    return;
+  }
+
+  // 2) sign message
+  const msgBytes = new TextEncoder().encode(ch.message);
+  const signed = await window.solana.signMessage(msgBytes, "utf8");
+
+  // 3) signature base58 (b58encode expects Uint8Array)
+  const sigB58 = b58encode(signed.signature);
+
+  // 4) verify (sets httpOnly cookie)
+  const vRes = await fetch("/api/auth/verify", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ wallet: state.wallet.pubkey, nonce: ch.nonce, signature: sigB58 })
+  });
+  const v = await vRes.json();
+  if(v.error){
+    console.warn("verify error:", v);
+    return;
+  }
+
+  // 5) read user
+  await refreshBackendUser();
+}
+
+/** -----------------------------
  * Phantom Desktop + Mobile Connect
  * ----------------------------- */
 function isMobile(){
@@ -533,6 +611,7 @@ async function trySilentReconnect(){
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
       await refreshSol();
+      await loginToBackend();
     }
   }catch(_e){
     // Normal: not trusted yet or Phantom doesn't allow silent reconnect here.
@@ -594,7 +673,8 @@ function handlePhantomMobileRedirect(){
     setConnected(payload.public_key);
 
     clearMobileLinkParams();
-    refreshSol();
+    await refreshSol();
+    // For now, backend login via message signing is desktop-only in this prototype.
   }catch(e){
     console.error(e);
     clearMobileLinkParams();
@@ -644,6 +724,7 @@ async function connectWallet(){
       markSilentAllowedThisTab();
 
       await refreshSol();
+      await loginToBackend();
       return;
     }catch(err){
       console.error("Desktop Phantom connect error:", err);
@@ -665,6 +746,11 @@ function renderTop(){
   document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
   document.getElementById('walletSol').textContent =
     state.wallet.connected ? (state.wallet.sol === 0 ? "0.000" : fmtSol(state.wallet.sol)) : '—';
+
+  const fakeEl = document.getElementById('walletFake');
+  if(fakeEl){
+    fakeEl.textContent = state.wallet.connected ? fmtFake(state.wallet.fake) : '—';
+  }
 }
 
 /** -----------------------------

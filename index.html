@@ -277,7 +277,7 @@
 
       <div class="right">
         <div class="statbar" id="walletBar">
-          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b>
+          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b> • SLOTS(fake): <b id="walletFake">—</b>
         </div>
         <button class="btn" id="btnRefresh" onclick="refreshSol()" disabled>Refresh SOL</button>
         <button class="btn primary" id="btnConnect" onclick="connectWallet()">Connect wallet</button>
@@ -349,6 +349,72 @@ function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
   }[m]));
+}
+
+/** -----------------------------
+ * NEW: backend login + fake balance
+ * ----------------------------- */
+async function refreshBackendUser(){
+  const el = document.getElementById("walletFake");
+  if(!el) return;
+  try{
+    const me = await fetch("/api/me2", { credentials: "include" }).then(r=>r.json());
+    if(me && me.ok && me.user && me.user.fake_balance !== undefined){
+      el.textContent = Number(me.user.fake_balance).toFixed(2);
+    }else{
+      el.textContent = "—";
+    }
+  }catch(_e){
+    el.textContent = "—";
+  }
+}
+
+async function loginToBackend(){
+  if(!state.wallet.connected || !state.wallet.pubkey){
+    alert("Connect wallet first.");
+    return;
+  }
+
+  // 1) request challenge
+  const ch = await fetch("/api/auth/challenge", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ wallet: state.wallet.pubkey })
+  }).then(r=>r.json());
+
+  if(ch.error){
+    alert("Challenge failed: " + ch.error);
+    return;
+  }
+
+  // 2) sign message (desktop Phantom only)
+  if(!(window.solana && window.solana.isPhantom && window.solana.signMessage)){
+    alert("Phantom signMessage not available in this browser.");
+    return;
+  }
+
+  const msgBytes = new TextEncoder().encode(ch.message);
+  const signed = await window.solana.signMessage(msgBytes, "utf8");
+
+  // 3) base58 encode signature
+  const sigB58 = b58encode(signed.signature);
+
+  // 4) verify (backend sets cookie)
+  const v = await fetch("/api/auth/verify", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    credentials: "include",
+    body: JSON.stringify({ wallet: state.wallet.pubkey, nonce: ch.nonce, signature: sigB58 })
+  }).then(r=>r.json());
+
+  if(v.error){
+    alert("Login failed: " + v.error);
+    return;
+  }
+
+  // 5) load fake balance
+  await refreshBackendUser();
 }
 
 /** -----------------------------
@@ -533,6 +599,7 @@ async function trySilentReconnect(){
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
       await refreshSol();
+      await refreshBackendUser(); // NEW
     }
   }catch(_e){
     // Normal: not trusted yet or Phantom doesn't allow silent reconnect here.
@@ -595,6 +662,7 @@ function handlePhantomMobileRedirect(){
 
     clearMobileLinkParams();
     refreshSol();
+    await refreshBackendUser(); // NEW
   }catch(e){
     console.error(e);
     clearMobileLinkParams();
@@ -644,6 +712,10 @@ async function connectWallet(){
       markSilentAllowedThisTab();
 
       await refreshSol();
+
+      // NEW: login flow (sign message + set cookie + show fake balance)
+      await loginToBackend();
+
       return;
     }catch(err){
       console.error("Desktop Phantom connect error:", err);
@@ -652,7 +724,7 @@ async function connectWallet(){
     }
   }
 
-  // Mobile: universal link connect
+  // Mobile: universal link connect (no signMessage here)
   if(isMobile()){
     startPhantomMobileConnect();
     return;
@@ -665,6 +737,10 @@ function renderTop(){
   document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
   document.getElementById('walletSol').textContent =
     state.wallet.connected ? (state.wallet.sol === 0 ? "0.000" : fmtSol(state.wallet.sol)) : '—';
+
+  // NEW: reset fake balance if disconnected
+  const fakeEl = document.getElementById("walletFake");
+  if(fakeEl && !state.wallet.connected) fakeEl.textContent = "—";
 }
 
 /** -----------------------------
@@ -1072,8 +1148,10 @@ function renderPriceGraphSvg(history){
   render();
   startSim();
   handlePhantomMobileRedirect();
-  // Desktop silent reconnect only if user connected earlier in THIS TAB session.
   trySilentReconnect();
+
+  // NEW: if you already have a session cookie, show fake balance on load
+  refreshBackendUser();
 })();
 </script>
 </body>

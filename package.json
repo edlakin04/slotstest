@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "dependencies": {
-    "pg": "^8.11.5"
+    "iron-session": "^8.0.2",
+    "pg": "^8.11.5",
+    "tweetnacl": "^1.0.3",
+    "bs58": "^5.0.0"
   }
 }

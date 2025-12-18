@@ -25,7 +25,6 @@ const sessionOptions = {
 };
 
 function verifySig({ wallet, message, signatureB58 }) {
-  // wallet is base58 public key on Solana
   const pubkeyBytes = bs58.decode(wallet);
   const sigBytes = bs58.decode(signatureB58);
   const msgBytes = new TextEncoder().encode(message);
@@ -53,7 +52,6 @@ async function handler(req, res) {
 
     await p.query("UPDATE auth_nonces SET used=true WHERE nonce=$1", [nonce]);
 
-    // upsert user
     await p.query(
       `INSERT INTO users (wallet, last_login_at, fake_balance)
        VALUES ($1, NOW(), 1000)

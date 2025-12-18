@@ -336,6 +336,9 @@
 
     .note{ color: var(--muted); font-size: 12px; margin-top: 10px; line-height:1.4; }
   </style>
+
+  <!-- TweetNaCl for Phantom mobile deeplink encryption/decryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.2/nacl-fast.min.js"></script>
 </head>
 
 <body>
@@ -345,7 +348,7 @@
         <div class="logo"></div>
         <div>
           <h1>Slots</h1>
-          <div class="sub">Prototype (Phantom connect • SOL balance)</div>
+          <div class="sub">Prototype (Phantom desktop + mobile • SOL balance)</div>
         </div>
       </div>
 
@@ -353,7 +356,8 @@
         <div class="statbar" id="walletBar">
           Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b>
         </div>
-        <button class="btn primary" id="btnConnect" onclick="connectPhantom()">Connect wallet</button>
+        <button class="btn" id="btnRefresh" onclick="refreshSol()" disabled>Refresh SOL</button>
+        <button class="btn primary" id="btnConnect" onclick="connectWallet()">Connect wallet</button>
       </div>
     </div>
 
@@ -386,9 +390,6 @@ const state = {
     sol: null
   },
 
-  // Hidden price model:
-  // - No decay over time
-  // - Vote impact weighted by time since last vote
   model: {
     floorUSD: 5,
     p: 1.50,
@@ -428,67 +429,275 @@ function escapeHtml(s){
 }
 
 /** -----------------------------
- * Solana RPC (no libs)
+ * Minimal Base58 (no dependency)
  * ----------------------------- */
-const RPC_URL = "https://api.mainnet-beta.solana.com";
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const BASE58_MAP = (() => {
+  const m = new Map();
+  for (let i=0;i<BASE58_ALPHABET.length;i++) m.set(BASE58_ALPHABET[i], i);
+  return m;
+})();
+function b58encode(bytes){
+  if(!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+  if(bytes.length === 0) return "";
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+
+  const digits = [0];
+  for (let i=zeros;i<bytes.length;i++){
+    let carry = bytes[i];
+    for (let j=0;j<digits.length;j++){
+      const x = digits[j] * 256 + carry;
+      digits[j] = x % 58;
+      carry = (x / 58) | 0;
+    }
+    while (carry){
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+  let out = "1".repeat(zeros);
+  for (let i=digits.length-1;i>=0;i--) out += BASE58_ALPHABET[digits[i]];
+  return out;
+}
+function b58decode(str){
+  if(!str) return new Uint8Array();
+  let zeros = 0;
+  while (zeros < str.length && str[zeros] === "1") zeros++;
+
+  const bytes = [0];
+  for (let i=zeros;i<str.length;i++){
+    const val = BASE58_MAP.get(str[i]);
+    if(val === undefined) throw new Error("Invalid base58 char");
+    let carry = val;
+    for (let j=0;j<bytes.length;j++){
+      const x = bytes[j] * 58 + carry;
+      bytes[j] = x & 0xff;
+      carry = x >> 8;
+    }
+    while (carry){
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  for (let k=0;k<zeros;k++) bytes.push(0);
+  bytes.reverse();
+  return new Uint8Array(bytes);
+}
+
+/** -----------------------------
+ * Solana RPC (browser-safe fallback)
+ * ----------------------------- */
+const RPC_URLS = [
+  "https://rpc.ankr.com/solana",
+  "https://api.mainnet-beta.solana.com"
+];
 
 async function solanaRpc(method, params){
-  const res = await fetch(RPC_URL, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ jsonrpc:"2.0", id:1, method, params })
-  });
-  const json = await res.json();
-  if(json.error) throw new Error(json.error.message || "RPC error");
-  return json.result;
+  let lastErr = null;
+
+  for (const url of RPC_URLS){
+    try{
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ jsonrpc:"2.0", id:1, method, params })
+      });
+
+      if(!res.ok){
+        throw new Error(`RPC HTTP ${res.status} on ${url}`);
+      }
+
+      const json = await res.json();
+      if(json.error) throw new Error(json.error.message || "RPC error");
+      return json.result;
+    }catch(e){
+      lastErr = e;
+      console.warn("RPC failed:", url, e);
+    }
+  }
+
+  throw lastErr || new Error("All RPC endpoints failed");
 }
 
 async function fetchSolBalance(pubkey){
-  // returns SOL number
   const result = await solanaRpc("getBalance", [pubkey, { commitment: "confirmed" }]);
   const lamports = result?.value ?? 0;
   return lamports / 1_000_000_000;
 }
 
-/** -----------------------------
- * Phantom connect
- * ----------------------------- */
-async function connectPhantom(){
+async function refreshSol(){
+  if(!state.wallet.connected || !state.wallet.pubkey) return;
   try{
-    if(!window.solana || !window.solana.isPhantom){
-      alert("Phantom not found. Install Phantom extension, then refresh.");
-      return;
-    }
-    const resp = await window.solana.connect();
-    const pubkey = resp.publicKey.toString();
-
-    state.wallet.connected = true;
-    state.wallet.pubkey = pubkey;
-
-    document.getElementById("btnConnect").textContent = "Wallet connected";
-    document.getElementById("btnConnect").disabled = true;
-    document.getElementById("btnCreate").disabled = false;
-    document.getElementById("btnMy").disabled = false;
-
-    renderTop();
-
-    // Fetch SOL balance
-    const sol = await fetchSolBalance(pubkey);
-    state.wallet.sol = sol;
+    const sol = await fetchSolBalance(state.wallet.pubkey);
+    state.wallet.sol = sol; // 0 is fine
     renderTop();
   }catch(err){
-    console.error(err);
-    alert("Wallet connection failed.");
+    console.error("SOL balance fetch error:", err);
+    state.wallet.sol = null;
+    renderTop();
+    alert("Connected, but couldn't fetch SOL balance (RPC issue). Try again.");
   }
+}
+
+/** -----------------------------
+ * Phantom Desktop + Mobile Connect
+ * Mobile uses Phantom universal link connect + encrypted callback. :contentReference[oaicite:1]{index=1}
+ * ----------------------------- */
+function isMobile(){
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
+
+function setConnected(pubkey){
+  state.wallet.connected = true;
+  state.wallet.pubkey = pubkey;
+
+  document.getElementById("btnConnect").textContent = "Wallet connected";
+  document.getElementById("btnConnect").disabled = true;
+
+  document.getElementById("btnRefresh").disabled = false;
+  document.getElementById("btnCreate").disabled = false;
+  document.getElementById("btnMy").disabled = false;
+
+  renderTop();
+}
+
+function clearMobileLinkParams(){
+  const url = new URL(window.location.href);
+  // Remove Phantom response params so refresh doesn't re-handle
+  ["phantom_encryption_public_key","nonce","data","errorCode","errorMessage","_phantom","_t"].forEach(k => url.searchParams.delete(k));
+  window.history.replaceState({}, "", url.toString());
+}
+
+function bytesToB64(bytes){
+  let s = "";
+  for (let i=0;i<bytes.length;i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+function b64ToBytes(b64){
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function handlePhantomMobileRedirect(){
+  const url = new URL(window.location.href);
+
+  const errCode = url.searchParams.get("errorCode");
+  const errMsg = url.searchParams.get("errorMessage");
+  if(errCode){
+    clearMobileLinkParams();
+    alert(`Phantom rejected: ${errMsg || errCode}`);
+    return;
+  }
+
+  const phantomPub = url.searchParams.get("phantom_encryption_public_key");
+  const nonce = url.searchParams.get("nonce");
+  const data = url.searchParams.get("data");
+
+  if(!phantomPub || !nonce || !data) return; // not a phantom return
+
+  try{
+    const stored = sessionStorage.getItem("PHANTOM_MOBILE_SESSION");
+    if(!stored) throw new Error("Missing mobile session. Tap connect again.");
+
+    const { dappSecretKeyB64 } = JSON.parse(stored);
+    const dappSecretKey = b64ToBytes(dappSecretKeyB64);
+
+    const phantomPubBytes = b58decode(phantomPub);
+    const nonceBytes = b58decode(nonce);
+    const dataBytes = b58decode(data);
+
+    const sharedSecret = nacl.box.before(phantomPubBytes, dappSecretKey);
+    const decrypted = nacl.box.open.after(dataBytes, nonceBytes, sharedSecret);
+    if(!decrypted) throw new Error("Failed to decrypt Phantom payload.");
+
+    const jsonStr = new TextDecoder().decode(decrypted);
+    const payload = JSON.parse(jsonStr);
+
+    if(!payload.public_key) throw new Error("No public_key in Phantom payload.");
+
+    setConnected(payload.public_key);
+
+    // Done: clean params, then fetch SOL
+    clearMobileLinkParams();
+    refreshSol();
+  }catch(e){
+    console.error(e);
+    clearMobileLinkParams();
+    alert("Mobile connect failed. Tap connect again.");
+  }
+}
+
+function startPhantomMobileConnect(){
+  // Create a fresh keypair each connect (recommended). :contentReference[oaicite:2]{index=2}
+  const dappKeyPair = nacl.box.keyPair();
+  const dappPublicKey = dappKeyPair.publicKey;
+  const dappSecretKey = dappKeyPair.secretKey;
+
+  sessionStorage.setItem("PHANTOM_MOBILE_SESSION", JSON.stringify({
+    dappPublicKeyB64: bytesToB64(dappPublicKey),
+    dappSecretKeyB64: bytesToB64(dappSecretKey),
+    createdAt: Date.now()
+  }));
+
+  // Phantom requires app_url + redirect_link. :contentReference[oaicite:3]{index=3}
+  const appUrl = window.location.origin;
+  const redirect = new URL(window.location.href);
+
+  // Marker so you can detect return if needed
+  redirect.searchParams.set("_phantom", "1");
+  redirect.searchParams.set("_t", String(Date.now()));
+
+  const params = new URLSearchParams();
+  params.set("app_url", appUrl);
+  params.set("dapp_encryption_public_key", b58encode(dappPublicKey));
+  params.set("redirect_link", redirect.toString());
+  params.set("cluster", "mainnet-beta");
+
+  const deeplink = `https://phantom.app/ul/v1/connect?${params.toString()}`;
+  window.location.href = deeplink;
+}
+
+async function connectWallet(){
+  // Desktop: injected Phantom
+  if(window.solana && window.solana.isPhantom){
+    try{
+      const resp = await window.solana.connect();
+      const pubkey = resp.publicKey.toString();
+      setConnected(pubkey);
+      await refreshSol(); // show 0.000 if none, no error
+      return;
+    }catch(err){
+      console.error("Desktop Phantom connect error:", err);
+      alert("Wallet connection failed.");
+      return;
+    }
+  }
+
+  // Mobile: use universal link connect
+  if(isMobile()){
+    startPhantomMobileConnect();
+    return;
+  }
+
+  // Neither
+  alert("Phantom not detected. Install Phantom extension (desktop) or use Phantom app (mobile).");
 }
 
 function renderTop(){
   document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
-  document.getElementById('walletSol').textContent = state.wallet.connected ? fmtSol(state.wallet.sol) : '—';
+  // If wallet connected and SOL is 0, show 0.000 (not —)
+  if(state.wallet.connected && state.wallet.sol === 0) {
+    document.getElementById('walletSol').textContent = "0.000";
+  } else {
+    document.getElementById('walletSol').textContent = state.wallet.connected ? fmtSol(state.wallet.sol) : '—';
+  }
 }
 
 /** -----------------------------
- * Slot generation
+ * Slot generation (unchanged)
  * ----------------------------- */
 const nameA = ["Neon","Turbo","Ghost","Violet","Chrome","Solar","Apex","Shadow","Feral","Nova","Glitch","Pixel","Hyper","Omega","Void","Mint","Lunar","Prism","Rogue","Flux"];
 const nameB = ["Trump","Wizard","Monkey","Whale","Cat","Pepe","Rocket","Goblin","Knight","Alien","Dragon","Degen","Reaper","Angel","Bot","King","Queen","Titan","Hacker","Joker"];
@@ -540,7 +749,7 @@ function initSlots(){
 }
 
 /** -----------------------------
- * Price model (time-between-votes only)
+ * Price model (time-between-votes only; no decay)
  * ----------------------------- */
 function computePriceFromScore(S){
   const {floorUSD, k, p} = state.model;
@@ -776,7 +985,6 @@ function renderDetail(id){
   const net = s.up - s.down;
 
   const votes = [...s.votes].slice(-80).reverse();
-  const sales = [...s.sales].slice(0, 50);
   const graphSvg = renderPriceGraphSvg(s.priceHistory);
 
   return `
@@ -824,32 +1032,22 @@ function renderDetail(id){
             ${graphSvg}
           </div>
 
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
-            <div>
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
-                <div style="font-weight:900;">Recent votes</div>
-                <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, s.votes.length)})</div>
-              </div>
-              <div class="list">
-                ${votes.length ? votes.map(v=>`
-                  <div class="row">
-                    <div><b style="font-family:var(--mono)">${escapeHtml(shortAddr(v.wallet))}</b></div>
-                    <div>${new Date(v.t).toLocaleTimeString()} • <span class="${v.v>0?'tagUp':'tagDown'}">${v.v>0?'▲ UP':'▼ DOWN'}</span></div>
-                  </div>
-                `).join('') : `<div class="row">No votes yet.</div>`}
-              </div>
+          <div style="margin-top: 12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+              <div style="font-weight:900;">Recent votes</div>
+              <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, s.votes.length)})</div>
             </div>
-
-            <div>
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
-                <div style="font-weight:900;">Sales history</div>
-                <div style="color:var(--muted); font-size:12px;">(disabled for now)</div>
-              </div>
-              <div class="list">
-                <div class="row">Buy/sales are disabled until smart contracts are added.</div>
-              </div>
+            <div class="list">
+              ${votes.length ? votes.map(v=>`
+                <div class="row">
+                  <div><b style="font-family:var(--mono)">${escapeHtml(shortAddr(v.wallet))}</b></div>
+                  <div>${new Date(v.t).toLocaleTimeString()} • <span class="${v.v>0?'tagUp':'tagDown'}">${v.v>0?'▲ UP':'▼ DOWN'}</span></div>
+                </div>
+              `).join('') : `<div class="row">No votes yet.</div>`}
             </div>
           </div>
+
+          <div class="note">Sales/buyouts are disabled until smart contracts are added.</div>
         </div>
       </div>
 
@@ -861,7 +1059,7 @@ function renderDetail(id){
           </div>
         </div>
         <div class="panelBody" style="color:var(--muted); font-size:13px; line-height:1.5;">
-          Phantom connect is real. Slots, votes, and prices are still simulated/off-chain.
+          Phantom connect works on desktop + mobile. Slots/votes/prices are simulated/off-chain.
         </div>
       </div>
     </div>
@@ -916,6 +1114,9 @@ function renderPriceGraphSvg(history){
   renderTop();
   render();
   startSim();
+
+  // If we returned from Phantom mobile connect, handle it.
+  handlePhantomMobileRedirect();
 })();
 </script>
 </body>

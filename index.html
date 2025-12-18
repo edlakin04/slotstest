@@ -276,9 +276,8 @@
       </div>
 
       <div class="right">
-        <!-- ✅ change: add walletFake -->
         <div class="statbar" id="walletBar">
-          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b> • SLOTS(fake): <b id="walletFake">—</b>
+          Wallet: <b id="walletShort">—</b> • SOL: <b id="walletSol">—</b>
         </div>
         <button class="btn" id="btnRefresh" onclick="refreshSol()" disabled>Refresh SOL</button>
         <button class="btn primary" id="btnConnect" onclick="connectWallet()">Connect wallet</button>
@@ -420,17 +419,20 @@ function b64ToBytes(b64){
   return out;
 }
 function b64UrlToBytes(s){
+  // base64url -> base64
   let b64 = s.replace(/-/g, "+").replace(/_/g, "/");
   while (b64.length % 4) b64 += "=";
   return b64ToBytes(b64);
 }
 function decodeAny(str){
+  // Some Phantom params come base58, some base64/base64url depending on platform.
+  // Try base58 first, then base64url.
   try { return b58decode(str); } catch(_e) {}
   return b64UrlToBytes(str);
 }
 
 /** -----------------------------
- * Solana RPC
+ * Solana RPC (expanded browser-friendly fallback)
  * ----------------------------- */
 const RPC_URLS = [
   "https://rpc.ankr.com/solana",
@@ -475,7 +477,7 @@ async function refreshSol(){
   if(!state.wallet.connected || !state.wallet.pubkey) return;
   try{
     const sol = await fetchSolBalance(state.wallet.pubkey);
-    state.wallet.sol = sol;
+    state.wallet.sol = sol; // 0 is fine
     renderTop();
   }catch(err){
     console.error("SOL balance fetch error:", err);
@@ -483,75 +485,6 @@ async function refreshSol(){
     renderTop();
     alert("Connected, but couldn't fetch SOL balance (RPC issue).");
   }
-}
-
-/** -----------------------------
- * ✅ Backend login (sign message) + fake balance
- * ----------------------------- */
-async function refreshBackendUser(){
-  const el = document.getElementById("walletFake");
-  if(!el) return;
-
-  try{
-    // IMPORTANT: include cookies
-    const me = await fetch("/api/me2", { credentials: "include" }).then(r=>r.json());
-
-    if(me && me.ok && me.user && me.user.fake_balance !== undefined){
-      el.textContent = Number(me.user.fake_balance).toFixed(2);
-    } else {
-      el.textContent = "—";
-    }
-  }catch(_e){
-    el.textContent = "—";
-  }
-}
-
-async function loginToBackend(){
-  if(!state.wallet.connected || !state.wallet.pubkey){
-    alert("Connect wallet first.");
-    return;
-  }
-
-  // 1) request challenge (include cookies)
-  const ch = await fetch("/api/auth/challenge", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    credentials: "include",
-    body: JSON.stringify({ wallet: state.wallet.pubkey })
-  }).then(r=>r.json());
-
-  if(ch.error){
-    alert("Challenge failed: " + ch.error);
-    return;
-  }
-
-  // 2) sign message
-  if(!(window.solana && window.solana.isPhantom && window.solana.signMessage)){
-    alert("Phantom signMessage not available in this browser.");
-    return;
-  }
-
-  const msgBytes = new TextEncoder().encode(ch.message);
-  const signed = await window.solana.signMessage(msgBytes, "utf8");
-
-  // 3) base58 encode signature
-  const sigB58 = b58encode(signed.signature);
-
-  // 4) verify (sets cookie) - include cookies
-  const v = await fetch("/api/auth/verify", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    credentials: "include",
-    body: JSON.stringify({ wallet: state.wallet.pubkey, nonce: ch.nonce, signature: sigB58 })
-  }).then(r=>r.json());
-
-  if(v.error){
-    alert("Login failed: " + v.error);
-    return;
-  }
-
-  // 5) load fake balance
-  await refreshBackendUser();
 }
 
 /** -----------------------------
@@ -577,6 +510,8 @@ function setConnected(pubkey){
 
 /** -----------------------------
  * DESKTOP SILENT RECONNECT (SESSION ONLY)
+ * - Refresh = silent reconnect
+ * - Close tab/reopen = must click connect again
  * ----------------------------- */
 const SILENT_FLAG_KEY = "SLOTS_CAN_SILENT";
 
@@ -588,6 +523,7 @@ function canSilentThisTab(){
 }
 
 async function trySilentReconnect(){
+  // Only attempt silent reconnect if user already connected in THIS TAB session.
   if(!canSilentThisTab()) return;
   if (!(window.solana && window.solana.isPhantom)) return;
 
@@ -597,9 +533,10 @@ async function trySilentReconnect(){
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
       await refreshSol();
-      await refreshBackendUser();
     }
-  }catch(_e){}
+  }catch(_e){
+    // Normal: not trusted yet or Phantom doesn't allow silent reconnect here.
+  }
 }
 
 function clearMobileLinkParams(){
@@ -609,6 +546,7 @@ function clearMobileLinkParams(){
 }
 
 function makeStateId(){
+  // random string for correlating localStorage session
   return `${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
 }
 
@@ -628,11 +566,13 @@ function handlePhantomMobileRedirect(){
   const data = url.searchParams.get("data");
   const st = url.searchParams.get("state");
 
-  if(!phantomPub || !nonce || !data || !st) return;
+  if(!phantomPub || !nonce || !data || !st) return; // not a phantom return
 
   try{
     const stored = localStorage.getItem(`PHANTOM_MOBILE_SESSION_${st}`);
     if(!stored) throw new Error("Missing mobile session. Tap connect again.");
+
+    // Clean up stored session after read
     localStorage.removeItem(`PHANTOM_MOBILE_SESSION_${st}`);
 
     const { dappSecretKeyB64 } = JSON.parse(stored);
@@ -663,6 +603,7 @@ function handlePhantomMobileRedirect(){
 }
 
 function startPhantomMobileConnect(){
+  // Create a fresh keypair each connect
   const dappKeyPair = nacl.box.keyPair();
   const dappPublicKey = dappKeyPair.publicKey;
   const dappSecretKey = dappKeyPair.secretKey;
@@ -699,13 +640,10 @@ async function connectWallet(){
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
 
+      // Allow silent reconnect ONLY for refreshes within this same tab session
       markSilentAllowedThisTab();
 
       await refreshSol();
-
-      // ✅ NEW: login after connect
-      await loginToBackend();
-
       return;
     }catch(err){
       console.error("Desktop Phantom connect error:", err);
@@ -727,10 +665,6 @@ function renderTop(){
   document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
   document.getElementById('walletSol').textContent =
     state.wallet.connected ? (state.wallet.sol === 0 ? "0.000" : fmtSol(state.wallet.sol)) : '—';
-
-  // ✅ keep fake balance sane when disconnected
-  const fakeEl = document.getElementById("walletFake");
-  if(fakeEl && !state.wallet.connected) fakeEl.textContent = "—";
 }
 
 /** -----------------------------
@@ -1138,6 +1072,7 @@ function renderPriceGraphSvg(history){
   render();
   startSim();
   handlePhantomMobileRedirect();
+  // Desktop silent reconnect only if user connected earlier in THIS TAB session.
   trySilentReconnect();
 })();
 </script>

@@ -23,14 +23,19 @@ const sessionOptions = {
 };
 
 async function handler(req, res) {
-  const wallet = req.session.user?.wallet;
-  if (!wallet) return res.status(401).json({ error: "Not logged in" });
+  try {
+    const wallet = req.session?.user?.wallet;
+    if (!wallet) return res.status(200).json({ ok: false, error: "Not logged in" });
 
-  const p = getPool();
-  const u = await p.query("SELECT wallet, fake_balance FROM users WHERE wallet=$1", [wallet]);
-  if (u.rowCount === 0) return res.status(401).json({ error: "User not found" });
+    const p = getPool();
+    const r = await p.query("SELECT wallet, fake_balance, last_login_at FROM users WHERE wallet=$1", [wallet]);
+    if (r.rowCount === 0) return res.status(200).json({ ok: false, error: "User not found" });
 
-  res.status(200).json({ ok: true, user: u.rows[0] });
+    res.status(200).json({ ok: true, user: r.rows[0] });
+  } catch (err) {
+    console.error("me2 error:", err);
+    res.status(500).json({ ok: false, error: "Server error" });
+  }
 }
 
 module.exports = withIronSessionApiRoute(handler, sessionOptions);

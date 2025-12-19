@@ -19,13 +19,13 @@ Expires: ${expiresAt.toISOString()}`;
 
     const p = getPool();
     await p.query(
-      "INSERT INTO auth_nonces (nonce, wallet, message, expires_at, used) VALUES ($1,$2,$3,$4,false)",
+      "insert into auth_nonces (nonce, wallet, message, expires_at, used) values ($1,$2,$3,$4,false)",
       [nonce, wallet, message, expiresAt.toISOString()]
     );
 
-    return res.status(200).json({ nonce, message, expiresAt: expiresAt.toISOString() });
+    res.status(200).json({ nonce, message, expiresAt: expiresAt.toISOString() });
   } catch (err) {
     console.error("challenge error:", err);
-    return res.status(500).json({ error: "Server error", message: err.message });
+    res.status(500).json({ error: "Server error", message: err.message });
   }
 };

@@ -1,24 +1,22 @@
 const { getPool } = require("./_lib/db");
-const { withSession } = require("./_lib/session");
+const { getSession } = require("./_lib/session");
 
-async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
-    const wallet = req.session.wallet || null;
-    if (!wallet) return res.status(200).json({ ok: true, wallet: null });
+    const s = getSession(req);
+    if (!s?.wallet) return res.status(200).json({ ok: true, wallet: null });
 
     const p = getPool();
-    const u = await p.query("SELECT wallet, fake_balance FROM users WHERE wallet=$1", [wallet]);
+    const u = await p.query("select wallet, fake_balance from users where wallet=$1", [s.wallet]);
     if (u.rowCount === 0) return res.status(200).json({ ok: true, wallet: null });
 
-    return res.status(200).json({
+    res.status(200).json({
       ok: true,
       wallet: u.rows[0].wallet,
       fake_balance: Number(u.rows[0].fake_balance)
     });
   } catch (err) {
     console.error("me error:", err);
-    return res.status(500).json({ error: "Server error", message: err.message });
+    res.status(500).json({ error: "Server error", message: err.message });
   }
-}
-
-module.exports = withSession(handler);
+};

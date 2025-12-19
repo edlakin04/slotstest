@@ -1,5 +1,6 @@
+// pages/api/auth/challenge.js
 const crypto = require("crypto");
-const { getPool } = require("../_lib/db");
+const { getPool } = require("../../../lib/db");
 
 module.exports = async function handler(req, res) {
   try {
@@ -7,6 +8,16 @@ module.exports = async function handler(req, res) {
 
     const { wallet } = req.body || {};
     if (!wallet || typeof wallet !== "string") return res.status(400).json({ error: "Missing wallet" });
+
+    const p = getPool();
+
+    // Ensure user exists so nonce FK never fails
+    await p.query(
+      `INSERT INTO users (wallet, fake_balance)
+       VALUES ($1, 1000)
+       ON CONFLICT (wallet) DO NOTHING`,
+      [wallet]
+    );
 
     const nonce = crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
@@ -17,15 +28,15 @@ Wallet: ${wallet}
 Nonce: ${nonce}
 Expires: ${expiresAt.toISOString()}`;
 
-    const p = getPool();
     await p.query(
-      "INSERT INTO auth_nonces (nonce, wallet, message, expires_at, used) VALUES ($1,$2,$3,$4,false)",
+      `INSERT INTO auth_nonces (nonce, wallet, message, expires_at, used)
+       VALUES ($1,$2,$3,$4,false)`,
       [nonce, wallet, message, expiresAt.toISOString()]
     );
 
-    res.status(200).json({ nonce, message, expiresAt: expiresAt.toISOString() });
+    return res.status(200).json({ nonce, message, expiresAt: expiresAt.toISOString() });
   } catch (err) {
     console.error("challenge error:", err);
-    res.status(500).json({ error: "Server error", message: err.message });
+    return res.status(500).json({ error: "Server error", message: err.message });
   }
 };

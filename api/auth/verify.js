@@ -6,7 +6,9 @@ const { withSession } = require("../_lib/session");
 function verifySig({ wallet, message, signatureB58 }) {
   const pubkeyBytes = bs58.decode(wallet);
   const sigBytes = bs58.decode(signatureB58);
+  const { TextEncoder } = require("util");
   const msgBytes = new TextEncoder().encode(message);
+
   return nacl.sign.detached.verify(msgBytes, sigBytes, pubkeyBytes);
 }
 

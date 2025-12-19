@@ -300,6 +300,24 @@
   </div>
 
 <script>
+/** =========================================================
+ * IMPORTANT: show JS crash instead of "blank UI"
+ * ========================================================= */
+(function(){
+  const show = (msg) => {
+    let el = document.getElementById("__jsCrash");
+    if(!el){
+      el = document.createElement("div");
+      el.id="__jsCrash";
+      el.style.cssText="position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;padding:12px 14px;border-radius:12px;background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.35);color:#ffd9d9;font:12px ui-monospace,monospace;white-space:pre-wrap;backdrop-filter:blur(8px)";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+  };
+  window.addEventListener("error", (e)=> show("JS crashed:\n" + (e?.message || e)));
+  window.addEventListener("unhandledrejection", (e)=> show("Promise rejected:\n" + (e?.reason?.message || e?.reason || e)));
+})();
+
 /** -----------------------------
  * State
  * ----------------------------- */
@@ -311,13 +329,6 @@ const state = {
     connected: false,
     pubkey: null,
     sol: null
-  },
-
-  // DB-backed "My slots" (only used when logged in to backend)
-  backend: {
-    loggedIn: false,
-    fakeBalance: null,
-    mySlots: []
   },
 
   model: {
@@ -356,89 +367,6 @@ function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
   }[m]));
-}
-
-/** -----------------------------
- * Backend login + user fetch + my slots
- * (Minimal additions; UI untouched)
- * ----------------------------- */
-async function refreshBackendUser(){
-  try{
-    const me = await fetch("/api/me", { credentials: "same-origin" }).then(r=>r.json());
-    if(!me || !me.wallet){
-      state.backend.loggedIn = false;
-      state.backend.fakeBalance = null;
-      const el = document.getElementById("walletFake");
-      if(el) el.textContent = "—";
-      return;
-    }
-    state.backend.loggedIn = true;
-    state.backend.fakeBalance = Number(me.fake_balance ?? 0);
-    const el = document.getElementById("walletFake");
-    if(el) el.textContent = state.backend.fakeBalance.toFixed(2);
-  }catch(_e){
-    state.backend.loggedIn = false;
-    state.backend.fakeBalance = null;
-    const el = document.getElementById("walletFake");
-    if(el) el.textContent = "—";
-  }
-}
-
-async function loadMySlotsFromBackend(){
-  try{
-    const r = await fetch("/api/slots/my", { credentials: "same-origin" }).then(r=>r.json());
-    if(r && r.ok && Array.isArray(r.slots)){
-      state.backend.mySlots = r.slots;
-      return state.backend.mySlots;
-    }
-  }catch(_e){}
-  state.backend.mySlots = [];
-  return [];
-}
-
-async function loginToBackend(){
-  if(!state.wallet.connected || !state.wallet.pubkey){
-    alert("Connect wallet first.");
-    return;
-  }
-
-  // Message signing only on injected Phantom (desktop)
-  if(!(window.solana && window.solana.isPhantom)){
-    alert("You are connected to Phantom, but NOT logged-in to backend yet.\nOn desktop, connect again and approve message signing.");
-    return;
-  }
-
-  const ch = await fetch("/api/auth/challenge", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    credentials: "same-origin",
-    body: JSON.stringify({ wallet: state.wallet.pubkey })
-  }).then(r=>r.json());
-
-  if(ch.error){
-    alert("Challenge failed: " + (ch.message || ch.error));
-    return;
-  }
-
-  const msgBytes = new TextEncoder().encode(ch.message);
-  const signed = await window.solana.signMessage(msgBytes, "utf8");
-  const sigB58 = b58encode(signed.signature);
-
-  const v = await fetch("/api/auth/verify", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    credentials: "same-origin",
-    body: JSON.stringify({ wallet: state.wallet.pubkey, nonce: ch.nonce, signature: sigB58 })
-  }).then(r=>r.json());
-
-  if(v.error){
-    alert("Login failed: " + (v.message || v.error));
-    return;
-  }
-
-  await refreshBackendUser();
-  // preload DB slots so "My slots" works after login
-  await loadMySlotsFromBackend();
 }
 
 /** -----------------------------
@@ -578,6 +506,57 @@ async function refreshSol(){
 }
 
 /** -----------------------------
+ * Backend helpers (minimal, non-breaking)
+ * ----------------------------- */
+async function refreshBackendMe(){
+  try{
+    const me = await fetch("/api/me").then(r=>r.json());
+    // your /api/me returns {"ok":true,"wallet":null} when not logged in
+    if(me && me.wallet){
+      document.getElementById("walletFake").textContent = Number(me.fake_balance || 0).toFixed(2);
+    } else {
+      document.getElementById("walletFake").textContent = "—";
+    }
+  }catch(_e){
+    document.getElementById("walletFake").textContent = "—";
+  }
+}
+
+async function loginToBackend(){
+  // Desktop Phantom only (needs signMessage)
+  if(!(window.solana && window.solana.isPhantom)) return;
+  if(!state.wallet.connected || !state.wallet.pubkey) return;
+
+  try{
+    const ch = await fetch("/api/auth/challenge", {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ wallet: state.wallet.pubkey })
+    }).then(r=>r.json());
+
+    if(ch.error) throw new Error(ch.message || ch.error);
+
+    const msgBytes = new TextEncoder().encode(ch.message);
+    const signed = await window.solana.signMessage(msgBytes, "utf8");
+    const sigB58 = b58encode(signed.signature);
+
+    const v = await fetch("/api/auth/verify", {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ wallet: state.wallet.pubkey, nonce: ch.nonce, signature: sigB58 })
+    }).then(r=>r.json());
+
+    if(v.error) throw new Error(v.message || v.error);
+
+    await refreshBackendMe();
+  }catch(e){
+    // IMPORTANT: never break the UI if backend login fails
+    console.warn("backend login failed:", e);
+    await refreshBackendMe();
+  }
+}
+
+/** -----------------------------
  * Phantom Desktop + Mobile Connect
  * ----------------------------- */
 function isMobile(){
@@ -613,7 +592,6 @@ function canSilentThisTab(){
 }
 
 async function trySilentReconnect(){
-  // Only attempt silent reconnect if user already connected in THIS TAB session.
   if(!canSilentThisTab()) return;
   if (!(window.solana && window.solana.isPhantom)) return;
 
@@ -623,12 +601,9 @@ async function trySilentReconnect(){
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
       await refreshSol();
-      // try backend login silently (will still require user approval if not previously approved)
       await loginToBackend();
     }
-  }catch(_e){
-    // Normal: not trusted yet or Phantom doesn't allow silent reconnect here.
-  }
+  }catch(_e){}
 }
 
 function clearMobileLinkParams(){
@@ -638,7 +613,6 @@ function clearMobileLinkParams(){
 }
 
 function makeStateId(){
-  // random string for correlating localStorage session
   return `${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
 }
 
@@ -658,13 +632,11 @@ function handlePhantomMobileRedirect(){
   const data = url.searchParams.get("data");
   const st = url.searchParams.get("state");
 
-  if(!phantomPub || !nonce || !data || !st) return; // not a phantom return
+  if(!phantomPub || !nonce || !data || !st) return;
 
   try{
     const stored = localStorage.getItem(`PHANTOM_MOBILE_SESSION_${st}`);
     if(!stored) throw new Error("Missing mobile session. Tap connect again.");
-
-    // Clean up stored session after read
     localStorage.removeItem(`PHANTOM_MOBILE_SESSION_${st}`);
 
     const { dappSecretKeyB64 } = JSON.parse(stored);
@@ -687,9 +659,7 @@ function handlePhantomMobileRedirect(){
 
     clearMobileLinkParams();
     refreshSol();
-
-    // Mobile can't signMessage (in browser), so no backend login here.
-    await refreshBackendUser();
+    refreshBackendMe();
   }catch(e){
     console.error(e);
     clearMobileLinkParams();
@@ -698,7 +668,6 @@ function handlePhantomMobileRedirect(){
 }
 
 function startPhantomMobileConnect(){
-  // Create a fresh keypair each connect
   const dappKeyPair = nacl.box.keyPair();
   const dappPublicKey = dappKeyPair.publicKey;
   const dappSecretKey = dappKeyPair.secretKey;
@@ -728,19 +697,17 @@ function startPhantomMobileConnect(){
 }
 
 async function connectWallet(){
-  // Desktop: injected Phantom
   if(window.solana && window.solana.isPhantom){
     try{
       const resp = await window.solana.connect();
       const pubkey = resp.publicKey.toString();
       setConnected(pubkey);
 
-      // Allow silent reconnect ONLY for refreshes within this same tab session
       markSilentAllowedThisTab();
 
       await refreshSol();
 
-      // NEW: backend login (challenge -> sign -> verify -> cookie)
+      // NEW (safe): backend login attempt, but NEVER breaks UI if it fails
       await loginToBackend();
 
       return;
@@ -751,7 +718,6 @@ async function connectWallet(){
     }
   }
 
-  // Mobile: universal link connect
   if(isMobile()){
     startPhantomMobileConnect();
     return;
@@ -764,10 +730,6 @@ function renderTop(){
   document.getElementById('walletShort').textContent = shortAddr(state.wallet.pubkey);
   document.getElementById('walletSol').textContent =
     state.wallet.connected ? (state.wallet.sol === 0 ? "0.000" : fmtSol(state.wallet.sol)) : '—';
-
-  // NEW: fake balance text (clears when disconnected)
-  const fakeEl = document.getElementById("walletFake");
-  if(fakeEl && !state.wallet.connected) fakeEl.textContent = "—";
 }
 
 /** -----------------------------
@@ -861,7 +823,7 @@ function applyVote(slot, v, wallet){
 
 function castVote(slotId, v, e){
   if(e) e.stopPropagation();
-  const slot = state.slots.find(s => s.id === slotId) || state.backend.mySlots.find(s => s.id === slotId);
+  const slot = state.slots.find(s => s.id === slotId);
   if(!slot) return;
 
   const w = state.wallet.connected ? state.wallet.pubkey : `BOT_${randHex(6)}`;
@@ -869,53 +831,15 @@ function castVote(slotId, v, e){
   render(false);
 }
 
-/** -----------------------------
- * Create slot
- * - If backend session exists, creates DB slot
- * - Otherwise falls back to old local create slot
- * ----------------------------- */
-async function openCreateModal(e){
+function openCreateModal(e){
   if(e) e.stopPropagation();
   if(!state.wallet.connected){
     alert("Connect Phantom first.");
     return;
   }
-
   const cost = 20;
   const ok = confirm(`Create slot (prototype). Cost: $${cost} (not real). Continue?`);
   if(!ok) return;
-
-  // Try backend create first (DB test)
-  try{
-    const r = await fetch("/api/slots/create", {
-      method: "POST",
-      credentials: "same-origin"
-    }).then(x=>x.json());
-
-    if(r && r.ok && r.slot){
-      // update fake balance display from backend
-      state.backend.loggedIn = true;
-      state.backend.fakeBalance = Number(r.fake_balance ?? state.backend.fakeBalance ?? 0);
-      const el = document.getElementById("walletFake");
-      if(el) el.textContent = state.backend.fakeBalance.toFixed(2);
-
-      // store in backend list & also inject into feed so you can see it instantly
-      state.backend.mySlots.unshift(r.slot);
-      state.slots.unshift(r.slot);
-
-      setView('my');
-      return;
-    }
-
-    // If not logged-in, show message and fallback to local
-    if(r && (r.error === "Not logged in" || r.error || r.message)){
-      alert("You are connected to Phantom, but NOT logged-in to backend yet.\nOn desktop, connect again and approve message signing.");
-    }
-  }catch(_e){
-    // ignore, fallback to local create
-  }
-
-  // Fallback: old local create behavior (still works even if backend down)
   createSlot();
 }
 
@@ -973,14 +897,6 @@ function setView(v, e){
   document.getElementById('tabTrending').classList.toggle('active', v === 'trending');
   document.getElementById('tabNew').classList.toggle('active', v === 'new');
 
-  // If user opens My slots, refresh DB slots if logged-in
-  if(v === 'my'){
-    if(state.backend.loggedIn){
-      loadMySlotsFromBackend().finally(()=>render());
-      return;
-    }
-  }
-
   render();
 }
 function goHome(){
@@ -1007,7 +923,7 @@ function rankSlotsTrending(){
 function rankSlotsNew(){
   return [...state.slots].sort((a,b)=> b.createdAt - a.createdAt);
 }
-function getMySlotsLocal(){
+function getMySlots(){
   if(!state.wallet.connected) return [];
   const w = state.wallet.pubkey;
   return state.slots.filter(s => s.creatorWallet === w || s.ownerWallet === w)
@@ -1024,7 +940,7 @@ function render(){
 
   let list = [];
   if(state.view === 'new') list = rankSlotsNew();
-  else if(state.view === 'my') list = state.backend.loggedIn ? state.backend.mySlots : getMySlotsLocal();
+  else if(state.view === 'my') list = getMySlots();
   else list = rankSlotsTrending();
 
   root.innerHTML = `
@@ -1045,7 +961,7 @@ function render(){
 
 function renderCard(s, rank){
   const locked = isLocked(s);
-  const net = (s.up||0) - (s.down||0);
+  const net = s.up - s.down;
   const badgeCls = locked ? 'locked' : 'unlocked';
   const badgeText = locked ? 'LOCKED' : 'UNLOCKED';
   const lockHint = locked ? `• until ${new Date(s.lockedUntil).toLocaleTimeString()}` : '';
@@ -1063,13 +979,13 @@ function renderCard(s, rank){
         </div>
 
         <div class="meta">
-          <div>Owner: <span style="font-family:var(--mono)">${escapeHtml(shortAddr((s.ownerWallet||"").startsWith('BOT_') ? 'So1a1111111111111111111111111111111111111' : (s.ownerWallet||"")))}</span></div>
+          <div>Owner: <span style="font-family:var(--mono)">${escapeHtml(shortAddr(s.ownerWallet.startsWith('BOT_') ? 'So1a1111111111111111111111111111111111111' : s.ownerWallet))}</span></div>
           <div class="price">${fmtMoney(s.priceUSD)}</div>
         </div>
 
         <div class="votes">
-          <span class="chip"><span class="up">▲</span> ${s.up||0}</span>
-          <span class="chip"><span class="down">▼</span> ${s.down||0}</span>
+          <span class="chip"><span class="up">▲</span> ${s.up}</span>
+          <span class="chip"><span class="down">▼</span> ${s.down}</span>
           <span class="chip"><span class="net">Net</span> ${net}</span>
         </div>
 
@@ -1084,14 +1000,14 @@ function renderCard(s, rank){
 }
 
 function renderDetail(id){
-  const s = state.slots.find(x => x.id === id) || state.backend.mySlots.find(x => x.id === id);
+  const s = state.slots.find(x => x.id === id);
   if(!s) return `<div class="panel"><div class="panelBody">Slot not found.</div></div>`;
 
   const locked = isLocked(s);
-  const net = (s.up||0) - (s.down||0);
+  const net = s.up - s.down;
 
-  const votes = [...(s.votes||[])].slice(-80).reverse();
-  const graphSvg = renderPriceGraphSvg(s.priceHistory||[]);
+  const votes = [...s.votes].slice(-80).reverse();
+  const graphSvg = renderPriceGraphSvg(s.priceHistory);
 
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -1129,7 +1045,7 @@ function renderDetail(id){
             </div>
             <div class="box">
               <div class="label">Votes</div>
-              <div class="value">▲ ${s.up||0}  ▼ ${s.down||0}  • Net ${net}</div>
+              <div class="value">▲ ${s.up}  ▼ ${s.down}  • Net ${net}</div>
             </div>
           </div>
 
@@ -1141,7 +1057,7 @@ function renderDetail(id){
           <div style="margin-top: 12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
               <div style="font-weight:900;">Recent votes</div>
-              <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, (s.votes||[]).length)})</div>
+              <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, s.votes.length)})</div>
             </div>
             <div class="list">
               ${votes.length ? votes.map(v=>`
@@ -1221,11 +1137,7 @@ function renderPriceGraphSvg(history){
   render();
   startSim();
   handlePhantomMobileRedirect();
-
-  // Try to show fake balance if already logged in (cookie exists)
-  refreshBackendUser();
-
-  // Desktop silent reconnect only if user connected earlier in THIS TAB session.
+  refreshBackendMe();
   trySilentReconnect();
 })();
 </script>

@@ -1,8 +1,0 @@
-{
-  "dependencies": {
-    "pg": "^8.0.0",
-    "iron-session": "^8.0.0",
-    "tweetnacl": "^1.0.0",
-    "bs58": "^6.0.0"
-  }
-}

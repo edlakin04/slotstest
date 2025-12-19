@@ -1,18 +1,17 @@
 const nacl = require("tweetnacl");
 const bs58 = require("bs58");
+const { TextEncoder } = require("util");
 const { getPool } = require("../_lib/db");
-const { withSession } = require("../_lib/session");
+const { setSessionCookie } = require("../_lib/session");
 
 function verifySig({ wallet, message, signatureB58 }) {
   const pubkeyBytes = bs58.decode(wallet);
   const sigBytes = bs58.decode(signatureB58);
-  const { TextEncoder } = require("util");
   const msgBytes = new TextEncoder().encode(message);
-
   return nacl.sign.detached.verify(msgBytes, sigBytes, pubkeyBytes);
 }
 
-async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -20,8 +19,7 @@ async function handler(req, res) {
     if (!wallet || !nonce || !signature) return res.status(400).json({ error: "Missing fields" });
 
     const p = getPool();
-
-    const rec = await p.query("SELECT * FROM auth_nonces WHERE nonce=$1", [nonce]);
+    const rec = await p.query("select * from auth_nonces where nonce=$1", [nonce]);
     if (rec.rowCount === 0) return res.status(400).json({ error: "Bad nonce" });
 
     const row = rec.rows[0];
@@ -32,25 +30,20 @@ async function handler(req, res) {
     const ok = verifySig({ wallet, message: row.message, signatureB58: signature });
     if (!ok) return res.status(401).json({ error: "Invalid signature" });
 
-    await p.query("UPDATE auth_nonces SET used=true WHERE nonce=$1", [nonce]);
+    await p.query("update auth_nonces set used=true where nonce=$1", [nonce]);
 
-    // Ensure user exists + update last_login
+    // ensure user exists with default fake balance
     await p.query(
-      `INSERT INTO users (wallet, fake_balance, last_login_at)
-       VALUES ($1, 1000, NOW())
-       ON CONFLICT (wallet) DO UPDATE SET last_login_at=NOW()`,
+      `insert into users (wallet, fake_balance, last_login_at)
+       values ($1, 1000, now())
+       on conflict (wallet) do update set last_login_at=now()`,
       [wallet]
     );
 
-    // Session cookie
-    req.session.wallet = wallet;
-    await req.session.save();
-
-    return res.status(200).json({ ok: true, wallet });
+    setSessionCookie(res, wallet);
+    res.status(200).json({ ok: true, wallet });
   } catch (err) {
     console.error("verify error:", err);
-    return res.status(500).json({ error: "Server error", message: err.message });
+    res.status(500).json({ error: "Server error", message: err.message });
   }
-}
-
-module.exports = withSession(handler);
+};

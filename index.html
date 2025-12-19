@@ -260,7 +260,6 @@
     .note{ color: var(--muted); font-size: 12px; margin-top: 10px; line-height:1.4; }
   </style>
 
-  <!-- TweetNaCl for Phantom mobile deeplink encryption/decryption -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.2/nacl-fast.min.js"></script>
 </head>
 
@@ -330,6 +329,9 @@ const state = {
     pubkey: null,
     sol: null
   },
+
+  // DB-backed "My slots" cache
+  mySlots: [],
 
   model: {
     floorUSD: 5,
@@ -437,20 +439,17 @@ function b64ToBytes(b64){
   return out;
 }
 function b64UrlToBytes(s){
-  // base64url -> base64
   let b64 = s.replace(/-/g, "+").replace(/_/g, "/");
   while (b64.length % 4) b64 += "=";
   return b64ToBytes(b64);
 }
 function decodeAny(str){
-  // Some Phantom params come base58, some base64/base64url depending on platform.
-  // Try base58 first, then base64url.
   try { return b58decode(str); } catch(_e) {}
   return b64UrlToBytes(str);
 }
 
 /** -----------------------------
- * Solana RPC (expanded browser-friendly fallback)
+ * Solana RPC
  * ----------------------------- */
 const RPC_URLS = [
   "https://rpc.ankr.com/solana",
@@ -495,7 +494,7 @@ async function refreshSol(){
   if(!state.wallet.connected || !state.wallet.pubkey) return;
   try{
     const sol = await fetchSolBalance(state.wallet.pubkey);
-    state.wallet.sol = sol; // 0 is fine
+    state.wallet.sol = sol;
     renderTop();
   }catch(err){
     console.error("SOL balance fetch error:", err);
@@ -506,24 +505,38 @@ async function refreshSol(){
 }
 
 /** -----------------------------
- * Backend helpers (minimal, non-breaking)
+ * Backend helpers (safe, non-breaking)
  * ----------------------------- */
 async function refreshBackendMe(){
   try{
     const me = await fetch("/api/me").then(r=>r.json());
-    // your /api/me returns {"ok":true,"wallet":null} when not logged in
     if(me && me.wallet){
       document.getElementById("walletFake").textContent = Number(me.fake_balance || 0).toFixed(2);
+      return me;
     } else {
       document.getElementById("walletFake").textContent = "—";
+      return { ok:true, wallet:null };
     }
   }catch(_e){
     document.getElementById("walletFake").textContent = "—";
+    return { ok:false, wallet:null };
+  }
+}
+
+async function loadMySlotsFromBackend(){
+  try{
+    const r = await fetch("/api/slots/my").then(r=>r.json());
+    if(r && Array.isArray(r.slots)){
+      state.mySlots = r.slots;
+    } else {
+      state.mySlots = [];
+    }
+  }catch(_e){
+    state.mySlots = [];
   }
 }
 
 async function loginToBackend(){
-  // Desktop Phantom only (needs signMessage)
   if(!(window.solana && window.solana.isPhantom)) return;
   if(!state.wallet.connected || !state.wallet.pubkey) return;
 
@@ -549,8 +562,8 @@ async function loginToBackend(){
     if(v.error) throw new Error(v.message || v.error);
 
     await refreshBackendMe();
+    await loadMySlotsFromBackend();
   }catch(e){
-    // IMPORTANT: never break the UI if backend login fails
     console.warn("backend login failed:", e);
     await refreshBackendMe();
   }
@@ -577,11 +590,6 @@ function setConnected(pubkey){
   renderTop();
 }
 
-/** -----------------------------
- * DESKTOP SILENT RECONNECT (SESSION ONLY)
- * - Refresh = silent reconnect
- * - Close tab/reopen = must click connect again
- * ----------------------------- */
 const SILENT_FLAG_KEY = "SLOTS_CAN_SILENT";
 
 function markSilentAllowedThisTab(){
@@ -706,8 +714,6 @@ async function connectWallet(){
       markSilentAllowedThisTab();
 
       await refreshSol();
-
-      // NEW (safe): backend login attempt, but NEVER breaks UI if it fails
       await loginToBackend();
 
       return;
@@ -831,15 +837,48 @@ function castVote(slotId, v, e){
   render(false);
 }
 
-function openCreateModal(e){
+/** -----------------------------
+ * Create slot
+ * - If backend session exists -> save to DB (/api/slots/create)
+ * - Otherwise -> fallback to local prototype createSlot()
+ * ----------------------------- */
+async function openCreateModal(e){
   if(e) e.stopPropagation();
   if(!state.wallet.connected){
     alert("Connect Phantom first.");
     return;
   }
+
   const cost = 20;
   const ok = confirm(`Create slot (prototype). Cost: $${cost} (not real). Continue?`);
   if(!ok) return;
+
+  // Try DB create if logged-in backend (desktop sign)
+  try{
+    const me = await refreshBackendMe();
+    if(me && me.wallet){
+      const r = await fetch("/api/slots/create", { method:"POST" }).then(r=>r.json());
+      if(r && r.ok && r.slot){
+        document.getElementById("walletFake").textContent = Number(r.fake_balance || 0).toFixed(2);
+
+        // refresh DB slots cache
+        await loadMySlotsFromBackend();
+
+        // also show it instantly in the global feed
+        state.slots.unshift(r.slot);
+
+        setView('my');
+        return;
+      } else {
+        alert("DB create failed: " + (r?.message || r?.error || "unknown"));
+        return;
+      }
+    }
+  }catch(_e){
+    // ignore and fallback
+  }
+
+  // fallback to local prototype if not backend signed-in
   createSlot();
 }
 
@@ -897,6 +936,14 @@ function setView(v, e){
   document.getElementById('tabTrending').classList.toggle('active', v === 'trending');
   document.getElementById('tabNew').classList.toggle('active', v === 'new');
 
+  // When opening "My slots", refresh from DB if possible, then render
+  if(v === 'my'){
+    // quick render immediately, then refresh and re-render
+    render();
+    loadMySlotsFromBackend().finally(()=>render());
+    return;
+  }
+
   render();
 }
 function goHome(){
@@ -924,6 +971,8 @@ function rankSlotsNew(){
   return [...state.slots].sort((a,b)=> b.createdAt - a.createdAt);
 }
 function getMySlots(){
+  // If backend returned slots, show those; otherwise fallback to local wallet-owned
+  if(state.mySlots && state.mySlots.length) return [...state.mySlots];
   if(!state.wallet.connected) return [];
   const w = state.wallet.pubkey;
   return state.slots.filter(s => s.creatorWallet === w || s.ownerWallet === w)
@@ -952,7 +1001,7 @@ function render(){
   `;
 
   for(const s of list){
-    const el = document.getElementById(`card_${s.id}`);
+    const el = document.getElementById(\`card_\${s.id}\`);
     if(el){
       el.addEventListener('click', ()=> openDetail(s.id));
     }
@@ -961,10 +1010,13 @@ function render(){
 
 function renderCard(s, rank){
   const locked = isLocked(s);
-  const net = s.up - s.down;
+  const net = (s.up||0) - (s.down||0);
   const badgeCls = locked ? 'locked' : 'unlocked';
   const badgeText = locked ? 'LOCKED' : 'UNLOCKED';
   const lockHint = locked ? `• until ${new Date(s.lockedUntil).toLocaleTimeString()}` : '';
+
+  const owner = (s.ownerWallet || "");
+  const ownerShown = owner.startsWith('BOT_') ? 'So1a1111111111111111111111111111111111111' : owner;
 
   return `
     <div class="card" id="card_${s.id}">
@@ -979,13 +1031,13 @@ function renderCard(s, rank){
         </div>
 
         <div class="meta">
-          <div>Owner: <span style="font-family:var(--mono)">${escapeHtml(shortAddr(s.ownerWallet.startsWith('BOT_') ? 'So1a1111111111111111111111111111111111111' : s.ownerWallet))}</span></div>
-          <div class="price">${fmtMoney(s.priceUSD)}</div>
+          <div>Owner: <span style="font-family:var(--mono)">${escapeHtml(shortAddr(ownerShown))}</span></div>
+          <div class="price">${fmtMoney(s.priceUSD || 5)}</div>
         </div>
 
         <div class="votes">
-          <span class="chip"><span class="up">▲</span> ${s.up}</span>
-          <span class="chip"><span class="down">▼</span> ${s.down}</span>
+          <span class="chip"><span class="up">▲</span> ${(s.up||0)}</span>
+          <span class="chip"><span class="down">▼</span> ${(s.down||0)}</span>
           <span class="chip"><span class="net">Net</span> ${net}</span>
         </div>
 
@@ -1000,14 +1052,17 @@ function renderCard(s, rank){
 }
 
 function renderDetail(id){
-  const s = state.slots.find(x => x.id === id);
+  const s =
+    state.slots.find(x => x.id === id) ||
+    (state.mySlots || []).find(x => x.id === id);
+
   if(!s) return `<div class="panel"><div class="panelBody">Slot not found.</div></div>`;
 
   const locked = isLocked(s);
-  const net = s.up - s.down;
+  const net = (s.up||0) - (s.down||0);
 
-  const votes = [...s.votes].slice(-80).reverse();
-  const graphSvg = renderPriceGraphSvg(s.priceHistory);
+  const votes = [...(s.votes||[])].slice(-80).reverse();
+  const graphSvg = renderPriceGraphSvg(s.priceHistory || []);
 
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -1041,11 +1096,11 @@ function renderDetail(id){
           <div class="kv">
             <div class="box">
               <div class="label">Current price</div>
-              <div class="value">${fmtMoney(s.priceUSD)}</div>
+              <div class="value">${fmtMoney(s.priceUSD || 5)}</div>
             </div>
             <div class="box">
               <div class="label">Votes</div>
-              <div class="value">▲ ${s.up}  ▼ ${s.down}  • Net ${net}</div>
+              <div class="value">▲ ${(s.up||0)}  ▼ ${(s.down||0)}  • Net ${net}</div>
             </div>
           </div>
 
@@ -1057,7 +1112,7 @@ function renderDetail(id){
           <div style="margin-top: 12px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
               <div style="font-weight:900;">Recent votes</div>
-              <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, s.votes.length)})</div>
+              <div style="color:var(--muted); font-size:12px;">(last ${Math.min(80, (s.votes||[]).length)})</div>
             </div>
             <div class="list">
               ${votes.length ? votes.map(v=>`

@@ -636,7 +636,7 @@ function makeStateId(){
   return `${Date.now()}_${Math.random().toString(16).slice(2)}_${Math.random().toString(16).slice(2)}`;
 }
 
-function handlePhantomMobileRedirect(){
+async function handlePhantomMobileRedirect(){
   const url = new URL(window.location.href);
 
   const errCode = url.searchParams.get("errorCode");

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Com Coin — Daily Pixel Meme</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; background: #111; color: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .card { border: 1px solid #eee; border-radius: 16px; padding: 16px; margin-top: 16px; }
+    .muted { opacity: 0.75; }
+    img { max-width: 100%; border-radius: 12px; border: 1px solid #eee; }
+    a { color: inherit; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Com Coin</h1>
+  <p class="muted">Connect Phantom → if you hold Com Coin → generate <b>one</b> pixel meme per day.</p>
+
+  <div class="row">
+    <button id="btnConnect">Connect Phantom</button>
+    <button id="btnDisconnect" disabled>Disconnect</button>
+    <a href="/rank">Ranks</a>
+  </div>
+
+  <div class="card">
+    <div><b>Wallet:</b> <span id="wallet">Not connected</span></div>
+    <div><b>Com Coin balance:</b> <span id="balance">—</span></div>
+    <div><b>Your rank:</b> <span id="rank">—</span></div>
+    <div class="muted" style="margin-top:8px;">Daily limit: <code>1 generation / wallet / day</code></div>
+
+    <div class="row" style="margin-top:14px;">
+      <button id="btnGenerate" disabled>Generate image now</button>
+      <button id="btnCopyTweet" disabled>Copy tweet</button>
+      <button id="btnDownload" disabled>Download PNG</button>
+    </div>
+
+    <div id="msg" class="muted" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card" id="outCard" style="display:none;">
+    <h3 style="margin-top:0;">Your daily pull</h3>
+    <img id="outImg" alt="Com Coin Meme" />
+    <p id="shillText" class="muted"></p>
+  </div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

@@ -163,7 +163,6 @@ async function connectPhantom(opts) {
   if (elWallet) elWallet.textContent = publicKeyBase58;
   setConnectedUI(true);
   await refreshBalanceAndRank();
-  // refresh rank cards if on rank page
   if (!viewRank?.classList.contains("hidden")) await loadRankCards();
 }
 
@@ -194,7 +193,6 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   setConnectedUI(false);
   setMsg("");
 
-  // rank cards reset
   if (rankCardsMsg) rankCardsMsg.textContent = "CONNECT TO LOAD YOUR COM CARDS.";
   if (rankMiniGrid) rankMiniGrid.innerHTML = "";
 });
@@ -268,11 +266,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pubkey: publicKeyBase58,
-        message,
-        signature
-      })
+      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature })
     });
 
     const rawText = await res.text();
@@ -281,13 +275,13 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     if (!res.ok) throw new Error(data?.error || rawText || `HTTP ${res.status}`);
 
-    // Compatibility:
-    // - Old: { image_b64, mime }
-    // - New: { imageUrl, cardId, name }
-    let imgSrc = null;
+    // ✅ accept both camelCase and snake_case
+    const urlFromApi = data?.imageUrl || data?.image_url || null;
 
-    if (data?.imageUrl) {
-      imgSrc = data.imageUrl;
+    let imgSrc = null;
+    if (urlFromApi) {
+      // ✅ cache-bust so it always loads fresh
+      imgSrc = `${urlFromApi}${urlFromApi.includes("?") ? "&" : "?"}v=${Date.now()}`;
     } else if (data?.image_b64) {
       imgSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
     } else if (data?.b64_json) {
@@ -298,12 +292,16 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     lastImageSrc = imgSrc;
 
-    if (outImg) outImg.src = lastImageSrc;
+    if (outImg) {
+      outImg.onerror = () => {
+        setMsg("IMAGE SAVED BUT CAN’T LOAD IT. MAKE SUPABASE BUCKET PUBLIC.", "bad");
+      };
+      outImg.src = lastImageSrc;
+    }
     if (outWrap) outWrap.style.display = "block";
 
     if (shillText) shillText.textContent = "START SHILLING TODAY • $COMCOIN";
 
-    // Show card id + name if backend provides it
     if (cardMetaMini) {
       if (data?.cardId || data?.name) {
         const parts = [];
@@ -321,11 +319,9 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
-    // If user is on Com Cards page, refresh list
     if (!viewCards?.classList.contains("hidden")) {
       await loadBoard(cardsSort?.value || "trending");
     }
-    // If user is on Rank page, refresh their mini grid
     if (!viewRank?.classList.contains("hidden")) {
       await loadRankCards();
     }
@@ -445,8 +441,8 @@ function renderCards(container, items, opts = {}) {
 
     const owner = it.owner_wallet || it.ownerWallet || "";
     const id = it.id || it.cardId || "";
-    const up = Number(it.upvotes ?? it.upVotes ?? 0);
-    const down = Number(it.downvotes ?? it.downVotes ?? 0);
+    const up = Number(it.upvotes ?? 0);
+    const down = Number(it.downvotes ?? 0);
     const score = (typeof it.score === "number") ? it.score : (up - down);
 
     const ownerSpan = document.createElement("span");
@@ -491,12 +487,8 @@ function renderCards(container, items, opts = {}) {
     downBtn.className = "btn";
     downBtn.textContent = "DOWN";
 
-    upBtn.onclick = async () => {
-      await voteCard(id, +1, pill);
-    };
-    downBtn.onclick = async () => {
-      await voteCard(id, -1, pill);
-    };
+    upBtn.onclick = async () => { await voteCard(id, +1, pill); };
+    downBtn.onclick = async () => { await voteCard(id, -1, pill); };
 
     btns.appendChild(upBtn);
     btns.appendChild(downBtn);
@@ -505,7 +497,6 @@ function renderCards(container, items, opts = {}) {
     voteRow.appendChild(btns);
 
     card.appendChild(voteRow);
-
     container.appendChild(card);
   }
 }
@@ -531,13 +522,7 @@ async function voteCard(cardId, vote, pillEl) {
     const res = await fetch("/api/vote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        cardId,
-        vote,
-        pubkey: publicKeyBase58,
-        message,
-        signature
-      })
+      body: JSON.stringify({ cardId, vote, pubkey: publicKeyBase58, message, signature })
     });
 
     const text = await res.text();
@@ -563,13 +548,9 @@ async function openWalletPage(wallet) {
   walletCardsMsg.textContent = "LOADING WALLET CARDS…";
   walletCardsGrid.innerHTML = "";
 
-  // Rank on wallet page: if it's your wallet, use your existing rank info
-  // Otherwise, we can only show "rank by cards" OR just show cards.
-  // We'll keep it simple: show "CARDS OWNED" and if wallet==you, show your rank text.
   const isMe = publicKeyBase58 && wallet === publicKeyBase58;
 
   if (isMe) {
-    // your rank already computed from balance
     walletRankBig.textContent = rankBig?.textContent || "—";
     walletRankCallout.textContent = rankCallout?.textContent || "—";
   } else {
@@ -598,8 +579,6 @@ async function openWalletPage(wallet) {
   }
 }
 
-/* ---------------- Rank page: show your cards ---------------- */
-
 async function loadRankCards() {
   try {
     if (!publicKeyBase58) {
@@ -626,14 +605,12 @@ async function loadRankCards() {
 
     if (rankCardsMsg) rankCardsMsg.textContent = `YOU HAVE ${items.length} COM CARDS.`;
 
-    // mini thumbs
     for (const it of items.slice(0, 24)) {
       const img = document.createElement("img");
       img.className = "miniThumb";
       img.src = it.image_url || "";
       img.alt = it.name || "COM CARD";
       img.onclick = async () => {
-        // open the board and search that id
         showView("cards");
         if (searchCardId) searchCardId.value = it.id;
         await searchById(it.id);
@@ -658,8 +635,6 @@ async function loadRankCards() {
 })();
 
 showView("gen");
-
-/* ---------------- tiny util ---------------- */
 
 function escapeHtml(s) {
   return String(s || "")

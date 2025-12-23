@@ -53,14 +53,7 @@ export default async function handler(req, res) {
     const ok = nacl.sign.detached.verify(msgBytes, sigBytes, pubBytes);
     if (!ok) return j(res, 401, { stage: "sig", error: "Signature verification failed" });
 
-    // Daily limit
-    const today = new Date().toISOString().slice(0, 10);
-    const limiterKey = `gen:${pubkey}:${today}`;
-
-    const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
-    if (already) return j(res, 429, { stage: "limit", error: "Daily limit reached (1/day)" });
-
-    await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
+    
 
     // Token gate (comment out for testing)
     // const uiAmount = await getUiTokenBalance({ rpcUrl, mint, owner: pubkey });

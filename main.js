@@ -108,7 +108,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
     rankCallout.innerHTML = `YOU ARE <b>${r.name}</b>. NEXT: <b>${n ? n.name : "MAXED"}</b>.`;
   }
 
-  const eligible = amt > 0; // set to (amt >= 0) for testing
+  const eligible = amt >= 0; // set to (amt >= 0) for testing
   btnGenerate.disabled = !eligible;
 
   // ✅ IMPORTANT: only set the “eligible” message if not quiet

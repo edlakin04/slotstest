@@ -1,5 +1,10 @@
 import bs58 from "https://cdn.skypack.dev/bs58";
 
+const tabGen = document.getElementById("tabGen");
+const tabRank = document.getElementById("tabRank");
+const viewGen = document.getElementById("viewGen");
+const viewRank = document.getElementById("viewRank");
+
 const btnConnect = document.getElementById("btnConnect");
 const btnDisconnect = document.getElementById("btnDisconnect");
 const btnGenerate = document.getElementById("btnGenerate");
@@ -16,6 +21,9 @@ const outImg = document.getElementById("outImg");
 const shillText = document.getElementById("shillText");
 const typeChip = document.getElementById("typeChip");
 
+const rankBig = document.getElementById("rankBig");
+const rankCallout = document.getElementById("rankCallout");
+
 let publicKeyBase58 = null;
 let lastImageSrc = null;
 
@@ -29,6 +37,9 @@ const RANKS = [
 
 function getRank(amount) {
   return [...RANKS].reverse().find(r => amount >= r.min) ?? RANKS[0];
+}
+function nextRank(amount) {
+  return RANKS.find(r => r.min > amount) || null;
 }
 
 function setMsg(text, kind = "muted") {
@@ -54,7 +65,18 @@ function setConnectedUI(connected) {
   }
 }
 
-async function refreshBalance() {
+function showView(which) {
+  const gen = which === "gen";
+  viewGen.classList.toggle("hidden", !gen);
+  viewRank.classList.toggle("hidden", gen);
+  tabGen.classList.toggle("active", gen);
+  tabRank.classList.toggle("active", !gen);
+}
+
+tabGen.onclick = () => showView("gen");
+tabRank.onclick = () => showView("rank");
+
+async function refreshBalanceAndRank() {
   if (!publicKeyBase58) return;
 
   setMsg("Checking COM COIN balance…");
@@ -65,19 +87,34 @@ async function refreshBalance() {
     setMsg(data?.error || "Balance check failed.", "bad");
     elBalance.textContent = "—";
     elRank.textContent = "—";
+    if (rankBig) rankBig.textContent = "—";
+    if (rankCallout) rankCallout.textContent = "Balance check failed.";
     btnGenerate.disabled = true;
     return;
   }
 
   const amt = Number(data.uiAmount || 0);
   elBalance.textContent = amt.toLocaleString("en-GB");
-  elRank.textContent = getRank(amt).name;
 
-  const eligible = amt >= 0; // <-- minimum required to generate (set to >=0 for testing)
+  const r = getRank(amt);
+  elRank.textContent = r.name;
+
+  if (rankBig) rankBig.textContent = r.name;
+
+  const n = nextRank(amt);
+  if (rankCallout) {
+    if (amt <= 0) {
+      rankCallout.innerHTML = `You own <b>no COM COIN</b>. Buy some to rank up.`;
+    } else {
+      rankCallout.innerHTML = `You are <b>${r.name}</b>. Next: <b>${n ? n.name : "MAXED"}</b>.`;
+    }
+  }
+
+  const eligible = amt >= 0; // set to (amt >= 0) for testing
   btnGenerate.disabled = !eligible;
 
   setMsg(
-    eligible ? "Eligible. Hit GENERATE." : "You need COM COIN to generate. (Check /rank for levels.)",
+    eligible ? "Eligible. Hit GENERATE." : "Hold COM COIN to generate (1/day).",
     eligible ? "ok" : "muted"
   );
 }
@@ -88,23 +125,27 @@ async function connectPhantom(opts) {
   publicKeyBase58 = resp.publicKey.toBase58();
   elWallet.textContent = publicKeyBase58;
   setConnectedUI(true);
-  await refreshBalance();
+  await refreshBalanceAndRank();
 }
 
-btnConnect.addEventListener("click", async () => {
+btnConnect.onclick = async () => {
   try {
     await connectPhantom();
   } catch (e) {
     setMsg(e?.message || String(e), "bad");
   }
-});
+};
 
-btnDisconnect.addEventListener("click", async () => {
+btnDisconnect.onclick = async () => {
   try { await requirePhantom().disconnect(); } catch {}
   publicKeyBase58 = null;
+
   elWallet.textContent = "Not connected";
   elBalance.textContent = "—";
   elRank.textContent = "—";
+  if (rankBig) rankBig.textContent = "—";
+  if (rankCallout) rankCallout.textContent = "Connect to see your holder level.";
+
   setConnectedUI(false);
 
   outCard.style.display = "none";
@@ -112,9 +153,9 @@ btnDisconnect.addEventListener("click", async () => {
   lastImageSrc = null;
 
   setMsg("");
-});
+};
 
-btnGenerate.addEventListener("click", async () => {
+btnGenerate.onclick = async () => {
   try {
     if (!publicKeyBase58) throw new Error("Connect Phantom first.");
 
@@ -124,7 +165,7 @@ btnGenerate.addEventListener("click", async () => {
 
     setMsg("Signing…");
     const provider = requirePhantom();
-    const today = new Date().toISOString().slice(0, 10); // UTC date
+    const today = new Date().toISOString().slice(0, 10);
     const message = `COM COIN daily meme | ${today} | I own this wallet`;
 
     const encoded = new TextEncoder().encode(message);
@@ -139,63 +180,59 @@ btnGenerate.addEventListener("click", async () => {
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data?.error || `Generate failed (HTTP ${res.status})`);
-    }
+    if (!res.ok) throw new Error(data?.error || `Generate failed (HTTP ${res.status})`);
+
+    const b64 = data.image_b64;
+    if (!b64) throw new Error("No image data returned from server.");
 
     const mime = data.mime || "image/png";
-    lastImageSrc = `data:${mime};base64,${data.image_b64}`;
+    lastImageSrc = `data:${mime};base64,${b64}`;
 
-    // ensure the output area becomes visible
-    outImg.onload = () => setMsg("Image ready. Save it + post it.", "ok");
-    outImg.onerror = () => setMsg("Image failed to render in browser (bad data).", "bad");
-
-    outImg.src = lastImageSrc;
+    // show output area before image loads so user sees it
     outCard.style.display = "block";
+    outImg.src = lastImageSrc;
 
-    if (typeChip) typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "";
-    if (shillText) shillText.innerHTML = `Post it with <b>#ComCoin</b> • start shilling 🫡`;
+    typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "";
+    shillText.innerHTML = `Post it with <b>#ComCoin</b> • start shilling 🫡`;
 
+    setMsg("Image ready. Save it + post it.", "ok");
     btnCopyTweet.disabled = false;
     btnDownload.disabled = false;
 
   } catch (e) {
     setMsg(e?.message || String(e), "bad");
   } finally {
-    await refreshBalance();
+    await refreshBalanceAndRank();
   }
-});
+};
 
-btnCopyTweet.addEventListener("click", async () => {
+btnCopyTweet.onclick = async () => {
   const text = `My COM COIN daily pull is in. #ComCoin start shilling 🫡`;
   await navigator.clipboard.writeText(text);
   setMsg("Tweet copied.", "ok");
-});
+};
 
-btnDownload.addEventListener("click", async () => {
+btnDownload.onclick = async () => {
   if (!lastImageSrc) return;
-
-  // Desktop download
   const a = document.createElement("a");
   a.href = lastImageSrc;
   a.download = `comcoin-${Date.now()}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
+  setMsg("If mobile opens the image, use Share → Save.", "ok");
+};
 
-  setMsg("If you’re on mobile and it opens the image, use Share → Save to Photos.", "ok");
-});
-
-// ✅ Auto-reconnect when returning from /rank or refreshing
+// Auto-reconnect on load
 (async function autoReconnect() {
   try {
     const provider = window?.solana;
     if (!provider?.isPhantom) return;
-
-    // If user already approved, Phantom will reconnect silently
     await connectPhantom({ onlyIfTrusted: true });
   } catch {
-    // ignore
     setConnectedUI(false);
   }
 })();
+
+// Default view
+showView("gen");

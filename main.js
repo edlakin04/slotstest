@@ -30,7 +30,6 @@ const rankCallout = document.getElementById("rankCallout");
 const rankCardsMsg = document.getElementById("rankCardsMsg");
 const rankMiniGrid = document.getElementById("rankMiniGrid");
 
-const cardsSort = document.getElementById("cardsSort");
 const btnRefreshCards = document.getElementById("btnRefreshCards");
 const cardsMsg = document.getElementById("cardsMsg");
 const cardsGrid = document.getElementById("cardsGrid");
@@ -38,6 +37,12 @@ const searchCardId = document.getElementById("searchCardId");
 const btnSearchCard = document.getElementById("btnSearchCard");
 
 const cardsBigTitle = document.getElementById("cardsBigTitle");
+
+// Custom dropdown elements
+const cardsSortDD = document.getElementById("cardsSortDD");
+const cardsSortBtn = document.getElementById("cardsSortBtn");
+const cardsSortMenu = document.getElementById("cardsSortMenu");
+const cardsSortLabel = document.getElementById("cardsSortLabel");
 
 const walletPageSub = document.getElementById("walletPageSub");
 const walletRankBig = document.getElementById("walletRankBig");
@@ -48,6 +53,9 @@ const btnBackToCards = document.getElementById("btnBackToCards");
 
 let publicKeyBase58 = null;
 let lastImageSrc = null;
+
+// board sort state
+let currentSort = "trending";
 
 const RANKS = [
   { name: "Dust", min: 0 },
@@ -77,8 +85,26 @@ function setCardsMsg(text = "", kind = "") {
 
 function setCardsBigTitle(sort) {
   if (!cardsBigTitle) return;
-  const s = (sort || "trending").toUpperCase();
-  cardsBigTitle.textContent = s;
+  cardsBigTitle.textContent = (sort || "trending").toUpperCase();
+}
+
+function getSortLabel(v){
+  if (v === "top") return "TOP";
+  if (v === "newest") return "NEWEST";
+  return "TRENDING";
+}
+
+function setSort(v){
+  currentSort = v || "trending";
+  if (cardsSortLabel) cardsSortLabel.textContent = getSortLabel(currentSort);
+  setCardsBigTitle(getSortLabel(currentSort));
+}
+
+function toggleSortMenu(force){
+  if (!cardsSortMenu) return;
+  const open = !cardsSortMenu.classList.contains("hidden");
+  const next = (typeof force === "boolean") ? force : !open;
+  cardsSortMenu.classList.toggle("hidden", !next);
 }
 
 function showView(which) {
@@ -104,9 +130,8 @@ tabRank && (tabRank.onclick = async () => {
 });
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
-  const sort = cardsSort?.value || "trending";
-  setCardsBigTitle(sort);
-  await loadBoard(sort);
+  setSort(currentSort);
+  await loadBoard(currentSort);
 });
 
 function isMobile() {
@@ -163,6 +188,27 @@ function fmtTime(ts) {
     return "";
   }
 }
+
+/* ---------------- Pixel dropdown wiring ---------------- */
+
+cardsSortBtn && (cardsSortBtn.onclick = (e) => {
+  e.preventDefault();
+  toggleSortMenu();
+});
+
+cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
+  const btn = e.target?.closest?.("[data-value]");
+  if (!btn) return;
+  const val = btn.getAttribute("data-value");
+  setSort(val);
+  toggleSortMenu(false);
+  await loadBoard(currentSort);
+});
+
+document.addEventListener("click", (e) => {
+  if (!cardsSortDD || !cardsSortMenu) return;
+  if (!cardsSortDD.contains(e.target)) toggleSortMenu(false);
+});
 
 /* ---------------- Wallet ---------------- */
 
@@ -328,9 +374,8 @@ btnGenerate && (btnGenerate.onclick = async () => {
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
     if (!viewCards?.classList.contains("hidden")) {
-      const sort = cardsSort?.value || "trending";
-      setCardsBigTitle(sort);
-      await loadBoard(sort);
+      setSort(currentSort);
+      await loadBoard(currentSort);
     }
     if (!viewRank?.classList.contains("hidden")) {
       await loadRankCards();
@@ -362,15 +407,8 @@ btnDownload && (btnDownload.onclick = () => {
 /* ---------------- COM CARDS BOARD ---------------- */
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
-  const sort = cardsSort?.value || "trending";
-  setCardsBigTitle(sort);
-  await loadBoard(sort);
-});
-
-cardsSort && (cardsSort.onchange = async () => {
-  const sort = cardsSort.value || "trending";
-  setCardsBigTitle(sort);
-  await loadBoard(sort);
+  setSort(currentSort);
+  await loadBoard(currentSort);
 });
 
 btnSearchCard && (btnSearchCard.onclick = async () => {
@@ -381,9 +419,8 @@ btnSearchCard && (btnSearchCard.onclick = async () => {
 
 btnBackToCards && (btnBackToCards.onclick = async () => {
   showView("cards");
-  const sort = cardsSort?.value || "trending";
-  setCardsBigTitle(sort);
-  await loadBoard(sort);
+  setSort(currentSort);
+  await loadBoard(currentSort);
 });
 
 async function loadBoard(sort) {
@@ -628,9 +665,8 @@ async function loadRankCards() {
       img.alt = it.name || "COM CARD";
       img.onclick = async () => {
         showView("cards");
-        const sort = cardsSort?.value || "trending";
-        setCardsBigTitle(sort);
         if (searchCardId) searchCardId.value = it.id;
+        setSort(currentSort);
         await searchById(it.id);
       };
       rankMiniGrid.appendChild(img);
@@ -652,6 +688,8 @@ async function loadRankCards() {
   }
 })();
 
+// init sort UI
+setSort(currentSort);
 showView("gen");
 
 function escapeHtml(s) {

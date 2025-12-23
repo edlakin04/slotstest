@@ -394,54 +394,6 @@
       text-align:left;
     }
 
-    /* Pixel select wrapper + custom arrow */
-    .pxSelect{
-      position: relative;
-      display:inline-block;
-    }
-
-    .select{
-      -webkit-appearance: none;
-      appearance: none;
-      border: 4px solid var(--border);
-      background: rgba(0,0,0,.88);
-      color: var(--text);
-      padding: 12px 44px 12px 12px; /* room for arrow */
-      box-shadow: 0 6px 0 rgba(0,0,0,.45);
-      font-family: var(--pix);
-      font-size: 10px;
-      letter-spacing:.10em;
-      text-transform: uppercase;
-      outline: none;
-      cursor:pointer;
-      line-height: 1.2;
-    }
-    .select:hover{
-      background: linear-gradient(135deg, rgba(46,229,157,.18), rgba(200,255,0,.10)), rgba(0,0,0,.88);
-    }
-    .select:active{
-      transform: translateY(2px);
-      box-shadow: 0 4px 0 rgba(0,0,0,.45);
-    }
-
-    .pxSelect::after{
-      content:"";
-      position:absolute;
-      right: 12px;
-      top: 50%;
-      width: 12px;
-      height: 12px;
-      transform: translateY(-50%);
-      background:
-        linear-gradient(45deg, transparent 50%, var(--hot) 50%),
-        linear-gradient(-45deg, transparent 50%, var(--hot) 50%);
-      background-position: left bottom, right bottom;
-      background-size: 50% 50%;
-      background-repeat: no-repeat;
-      filter: drop-shadow(0 4px 0 rgba(0,0,0,.45));
-      pointer-events:none;
-    }
-
     .input{
       border: 4px solid var(--border);
       background: rgba(0,0,0,.80);
@@ -552,7 +504,6 @@
       cursor:pointer;
     }
 
-    /* Bigger board title for the cards page */
     .boardBig{
       font-size: 28px;
       letter-spacing: .18em;
@@ -562,6 +513,84 @@
       color: var(--hot);
       width: fit-content;
       text-align:center;
+    }
+
+    /* ===== Pixel dropdown (custom, not native select) ===== */
+    .dd{ position:relative; display:inline-block; }
+    .ddBtn{
+      appearance:none;
+      border: 4px solid var(--border);
+      background: rgba(0,0,0,.88);
+      color: var(--text);
+      padding: 12px 44px 12px 12px;
+      box-shadow: 0 6px 0 rgba(0,0,0,.45);
+      cursor:pointer;
+      font-family: var(--pix);
+      font-size: 10px;
+      letter-spacing:.10em;
+      text-transform: uppercase;
+      outline:none;
+      line-height: 1.2;
+      position:relative;
+      min-width: 210px;
+      text-align:left;
+    }
+    .ddBtn:hover{
+      background: linear-gradient(135deg, rgba(46,229,157,.18), rgba(200,255,0,.10)), rgba(0,0,0,.88);
+    }
+    .ddBtn:active{
+      transform: translateY(2px);
+      box-shadow: 0 4px 0 rgba(0,0,0,.45);
+    }
+    .ddArrow{
+      position:absolute;
+      right: 12px;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      transform: translateY(-50%);
+      background:
+        linear-gradient(45deg, transparent 50%, var(--hot) 50%),
+        linear-gradient(-45deg, transparent 50%, var(--hot) 50%);
+      background-position: left bottom, right bottom;
+      background-size: 50% 50%;
+      background-repeat: no-repeat;
+      filter: drop-shadow(0 4px 0 rgba(0,0,0,.45));
+    }
+    .ddMenu{
+      position:absolute;
+      left:0;
+      top: calc(100% + 10px);
+      width: 100%;
+      z-index: 50;
+      border: 4px solid var(--border);
+      background: rgba(0,0,0,.94);
+      box-shadow:
+        0 0 0 4px rgba(0,0,0,.45),
+        0 10px 0 rgba(0,0,0,.45);
+      padding: 8px;
+    }
+    .ddItem{
+      width:100%;
+      text-align:left;
+      border: 4px solid var(--border2);
+      background: rgba(0,0,0,.85);
+      color: var(--text);
+      padding: 12px 10px;
+      margin: 8px 0;
+      box-shadow: 0 6px 0 rgba(0,0,0,.35);
+      cursor:pointer;
+      font-family: var(--pix);
+      font-size: 10px;
+      letter-spacing:.10em;
+      text-transform: uppercase;
+    }
+    .ddItem:hover{
+      background: linear-gradient(135deg, rgba(46,229,157,.20), rgba(200,255,0,.12)), rgba(0,0,0,.85);
+    }
+    .ddItem:active{
+      transform: translateY(2px);
+      box-shadow: 0 4px 0 rgba(0,0,0,.35);
     }
   </style>
 </head>
@@ -707,13 +736,20 @@
 
         <div class="boardHeader">
           <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            <span class="pxSelect">
-              <select class="select" id="cardsSort">
-                <option value="trending">Trending</option>
-                <option value="top">Top</option>
-                <option value="newest">Newest</option>
-              </select>
-            </span>
+            <!-- CUSTOM PIXEL DROPDOWN -->
+            <div class="dd" id="cardsSortDD">
+              <button class="ddBtn" id="cardsSortBtn" type="button">
+                <span id="cardsSortLabel">TRENDING</span>
+                <span class="ddArrow" aria-hidden="true"></span>
+              </button>
+
+              <div class="ddMenu hidden" id="cardsSortMenu">
+                <button class="ddItem" type="button" data-value="trending">TRENDING</button>
+                <button class="ddItem" type="button" data-value="top">TOP</button>
+                <button class="ddItem" type="button" data-value="newest">NEWEST</button>
+              </div>
+            </div>
+
             <button class="btn" id="btnRefreshCards">Refresh</button>
           </div>
 

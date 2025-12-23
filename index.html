@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>COM COIN — Start Shilling Today</title>
 
+  <!-- Pixel font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -13,216 +14,319 @@
     :root{
       --bg0:#04160B;
       --bg1:#062011;
-      --panel: rgba(0,0,0,.35);
-      --border: rgba(180,255,210,.22);
+
+      --panel: rgba(0,0,0,.38);
+      --panel2: rgba(0,0,0,.52);
+
+      --border: rgba(180,255,210,.30);
+      --border2: rgba(180,255,210,.18);
+
       --text:#E9FFF1;
-      --muted: rgba(233,255,241,.78);
+      --muted: rgba(233,255,241,.80);
+
       --hot:#C8FF00;
       --good:#2EE59D;
       --bad:#FF4D6D;
-      --shadow: 0 18px 70px rgba(0,0,0,.55);
-      --radius: 18px;
+
+      --shadow: 0 18px 70px rgba(0,0,0,.60);
       --pix: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
+
     *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+
     body{
-      margin:0; color:var(--text);
+      margin:0;
+      color:var(--text);
+      font-family: var(--pix);
+      image-rendering: pixelated;
+      overflow-x:hidden;
+
+      /* crisp pixel green background */
       background:
         linear-gradient(90deg, rgba(0,0,0,.14) 1px, transparent 1px),
         linear-gradient(rgba(0,0,0,.14) 1px, transparent 1px),
-        radial-gradient(900px 520px at 20% 10%, rgba(46,229,157,.18), transparent 60%),
-        radial-gradient(900px 520px at 80% 10%, rgba(200,255,0,.12), transparent 60%),
+        radial-gradient(1200px 600px at 20% 10%, rgba(46,229,157,.18), transparent 62%),
+        radial-gradient(1200px 600px at 80% 10%, rgba(200,255,0,.12), transparent 62%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      overflow-x:hidden;
-      image-rendering: pixelated;
     }
-    .wrap{ max-width:1000px; margin:0 auto; padding:18px 16px 64px; }
+
+    .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
+
+    /* Pixel UI helpers */
+    .px-border{
+      border: 4px solid var(--border);
+      box-shadow:
+        0 0 0 4px rgba(0,0,0,.35),
+        0 10px 0 rgba(0,0,0,.35);
+      background: linear-gradient(180deg, var(--panel), rgba(0,0,0,.26));
+    }
+    .px-border-soft{
+      border: 4px solid var(--border2);
+      box-shadow: 0 8px 0 rgba(0,0,0,.30);
+      background: rgba(0,0,0,.22);
+    }
+
     .topbar{
       display:flex; align-items:center; justify-content:space-between; gap:10px;
       padding:12px 14px;
-      border:2px solid var(--border);
-      background: linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.25));
-      border-radius: 999px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
     }
+
     .brand{ display:flex; align-items:center; gap:12px; min-width:0; }
     .logo{
-      width:42px; height:42px; border-radius: 14px;
+      width:44px; height:44px;
+      border: 4px solid var(--border);
       background: linear-gradient(135deg, rgba(46,229,157,.95), rgba(200,255,0,.75));
-      border:2px solid rgba(180,255,210,.22);
-      box-shadow: 0 14px 40px rgba(46,229,157,.18);
+      box-shadow: 0 8px 0 rgba(0,0,0,.35);
       flex:0 0 auto;
     }
-    .brandName{ font-family:var(--pix); font-size:12px; letter-spacing:.16em; text-transform:uppercase; margin:0; white-space:nowrap; }
-    .brandTag{ margin-top:4px; font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:340px; }
-
-    .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
-    .tab{
-      padding:10px 12px;
-      border:2px solid var(--border);
-      border-radius: 999px;
-      background: rgba(0,0,0,.25);
-      color: var(--muted);
+    .brandName{
       font-size: 12px;
-      font-family: var(--pix);
-      letter-spacing:.08em;
+      letter-spacing:.18em;
       text-transform: uppercase;
+      margin:0;
+      white-space:nowrap;
+    }
+    .brandTag{
+      margin-top:6px;
+      font-size: 10px;
+      color: var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 420px;
+      letter-spacing:.06em;
+    }
+
+    .tabs{ display:flex; gap:10px; flex-wrap:wrap; }
+    .tab{
+      padding: 12px 12px;
+      border: 4px solid var(--border);
+      background: rgba(0,0,0,.25);
+      box-shadow: 0 6px 0 rgba(0,0,0,.35);
       cursor:pointer;
+      font-size: 10px;
+      letter-spacing:.10em;
+      text-transform: uppercase;
       user-select:none;
     }
     .tab.active{
+      background: linear-gradient(135deg, rgba(46,229,157,.25), rgba(200,255,0,.18));
       color: var(--text);
-      background: linear-gradient(135deg, rgba(46,229,157,.22), rgba(200,255,0,.18));
     }
 
     .btn{
-      appearance:none; border:2px solid var(--border);
+      appearance:none;
+      border: 4px solid var(--border);
       background: rgba(0,0,0,.28);
       color: var(--text);
-      padding:11px 14px;
-      border-radius: 999px;
+      padding: 12px 12px;
+      box-shadow: 0 6px 0 rgba(0,0,0,.35);
       cursor:pointer;
       font-family: var(--pix);
-      font-size: 12px;
-      letter-spacing:.06em;
+      font-size: 10px;
+      letter-spacing:.10em;
       text-transform: uppercase;
-      box-shadow: 0 10px 26px rgba(0,0,0,.30);
     }
+    .btn:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
     .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
     .btn.primary{
-      background: linear-gradient(135deg, rgba(46,229,157,.28), rgba(200,255,0,.22));
+      background: linear-gradient(135deg, rgba(46,229,157,.30), rgba(200,255,0,.20));
     }
 
     .stage{
       margin-top: 16px;
-      border:2px solid var(--border);
-      border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,.22));
-      box-shadow: var(--shadow);
-      padding: 20px;
-      text-align:center;
+      padding: 18px 16px 18px;
     }
+
+    /* BIG gradient bouncing title */
     .bigTitle{
-      margin: 8px 0 12px;
-      font-family: var(--pix);
-      font-size: clamp(18px, 2.8vw, 30px);
-      letter-spacing:.14em;
+      margin: 10px 0 14px;
+      font-size: clamp(18px, 3vw, 32px);
+      letter-spacing: .18em;
       text-transform: uppercase;
-      line-height: 1.25;
-      color: var(--hot);
-      text-shadow: 0 10px 30px rgba(0,0,0,.55);
-      animation: pop 1.4s ease-in-out infinite;
+      line-height: 1.2;
+      text-shadow: 0 10px 0 rgba(0,0,0,.35);
+      display:inline-block;
+      animation: bounce 1.25s ease-in-out infinite;
+      background: linear-gradient(90deg, #C8FF00, #2EE59D, #00FFD1, #C8FF00);
+      background-size: 240% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,.45));
     }
-    @keyframes pop{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-2px)} }
+    @keyframes bounce{
+      0%,100%{ transform: translateY(0); }
+      50%{ transform: translateY(-3px); }
+    }
 
     .sub{
-      margin:0 auto 16px;
-      max-width: 860px;
+      margin: 0 auto 16px;
+      max-width: 920px;
       color: var(--muted);
-      line-height: 1.7;
-      font-size: 14px;
+      line-height: 1.95;
+      font-size: 11px;
+      letter-spacing:.06em;
     }
+    .sub b{ color: var(--text); }
+
     .stats{
       display:grid;
       grid-template-columns: repeat(3, minmax(0,1fr));
-      gap: 10px;
+      gap: 12px;
+      max-width: 980px;
       margin: 0 auto 14px;
-      max-width: 920px;
       text-align:left;
     }
-    @media (max-width: 900px){ .stats{ grid-template-columns: 1fr; } }
-    .stat{
-      border:2px solid rgba(180,255,210,.18);
-      border-radius: 14px;
-      background: rgba(0,0,0,.25);
-      padding: 12px;
-      min-width:0;
+    @media (max-width: 950px){ .stats{ grid-template-columns: 1fr; } }
+
+    .stat{ padding: 14px 12px; min-width:0; }
+    .k{
+      font-size: 9px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
-    .k{ font-family: var(--pix); font-size: 10px; letter-spacing:.10em; color: var(--muted); text-transform: uppercase; }
-    .v{ margin-top: 8px; font-weight: 800; font-size: 14px; min-width:0; }
-    .walletFit{
-      font-family: var(--pix);
-      font-size: 10px;
+    .v{
+      margin-top: 10px;
+      font-size: 11px;
       letter-spacing:.08em;
+      min-width:0;
+      line-height: 1.5;
+    }
+    .walletFit{
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       display:block;
       max-width: 100%;
     }
-    .actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin: 10px 0 8px; }
-    .msg{ min-height: 24px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+
+    .actions{
+      display:flex;
+      gap:12px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin: 12px 0 6px;
+    }
+
+    .msg{
+      min-height: 26px;
+      margin-top: 10px;
+      font-size: 10px;
+      letter-spacing:.08em;
+      color: var(--muted);
+      line-height: 1.8;
+    }
     .msg.ok{ color: rgba(46,229,157,.98); }
     .msg.bad{ color: rgba(255,77,109,.98); }
 
-    .out{
+    /* Output area always present, just hidden until used */
+    .outWrap{
       display:none;
-      max-width: 920px;
-      margin: 14px auto 0;
-      border:2px solid rgba(180,255,210,.18);
-      border-radius: 14px;
-      background: rgba(0,0,0,.26);
-      padding: 12px;
-      text-align:left;
+      max-width: 980px;
+      margin: 16px auto 0;
+      padding: 14px 12px;
     }
-    .out img{
-      width: 100%;
-      border-radius: 12px;
-      border:2px solid rgba(180,255,210,.14);
-      background: rgba(0,0,0,.35);
+    .outImg{
+      width:100%;
       display:block;
+      border: 4px solid var(--border2);
+      box-shadow: 0 10px 0 rgba(0,0,0,.30);
+      background: rgba(0,0,0,.35);
     }
     .outLine{
-      margin-top: 10px;
+      margin-top: 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap: 12px;
+      flex-wrap:wrap;
       color: var(--muted);
-      font-size: 12px;
-      display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+      font-size: 10px;
+      letter-spacing:.08em;
+      line-height: 1.8;
     }
     .chip{
-      font-family: var(--pix);
-      font-size: 10px;
-      letter-spacing:.10em;
-      text-transform: uppercase;
-      padding: 8px 10px;
-      border-radius: 999px;
-      border:2px solid rgba(180,255,210,.18);
+      border: 4px solid var(--border2);
       background: rgba(0,0,0,.22);
+      padding: 10px 10px;
+      box-shadow: 0 8px 0 rgba(0,0,0,.28);
+      font-size: 9px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
       color: var(--text);
     }
 
+    .how{
+      max-width: 980px;
+      margin: 16px auto 0;
+      padding: 14px 12px;
+    }
+    .how h3{
+      margin: 0 0 10px;
+      font-size: 10px;
+      letter-spacing:.14em;
+      text-transform: uppercase;
+      color: var(--hot);
+    }
+    .how ol{
+      margin:0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 2.0;
+      font-size: 10px;
+      letter-spacing:.08em;
+    }
+
+    .hidden{ display:none !important; }
+
+    /* Rank “scoreboard” */
     .scoreCard{
-      max-width: 920px;
+      max-width: 980px;
       margin: 0 auto;
-      border:2px dashed rgba(180,255,210,.20);
-      border-radius: 14px;
-      background: rgba(0,0,0,.18);
-      padding: 14px;
+      padding: 16px 12px;
       text-align:left;
     }
     .rankBig{
-      font-family: var(--pix);
-      font-size: clamp(16px, 3vw, 28px);
-      letter-spacing:.14em;
-      text-transform: uppercase;
-      margin: 0 0 10px;
-      color: var(--hot);
       text-align:center;
+      font-size: clamp(18px, 3.2vw, 34px);
+      letter-spacing:.18em;
+      text-transform: uppercase;
+      margin: 2px 0 14px;
+      color: var(--hot);
+      text-shadow: 0 10px 0 rgba(0,0,0,.35);
     }
-    .callout{ color: var(--muted); font-size: 13px; line-height: 1.8; }
-    .hidden{ display:none !important; }
+    .rankCallout{
+      font-size: 10px;
+      letter-spacing:.08em;
+      color: var(--muted);
+      line-height: 2.0;
+    }
+    .levels{
+      margin-top: 12px;
+      font-size: 9px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      color: rgba(233,255,241,.70);
+      line-height: 2.0;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <div class="topbar">
+
+    <!-- TOP BAR -->
+    <div class="topbar px-border">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div style="min-width:0">
           <p class="brandName">COM COIN</p>
-          <div class="brandTag">Phantom gated • daily pixel generator • 1/day</div>
+          <div class="brandTag">$COMCOIN • daily pixel pull • phantom gated • 1/day</div>
         </div>
       </div>
 
@@ -238,23 +342,24 @@
     </div>
 
     <!-- GENERATOR VIEW -->
-    <div class="stage" id="viewGen">
+    <div class="stage px-border" id="viewGen">
       <div class="bigTitle">START SHILLING TODAY</div>
+
       <p class="sub">
-        Connect Phantom. Hold <b>COM COIN</b> → get <b>one</b> pixel pull per day.
-        It stamps <b>COM COIN</b> at the bottom. Post with <b>#ComCoin</b>.
+        Connect Phantom. Hold <b>$COMCOIN</b> → get <b>one</b> pixel meme pull per day.
+        It stamps <b>COM COIN</b> at the bottom. Post it and go raid the timeline.
       </p>
 
       <div class="stats">
-        <div class="stat">
+        <div class="stat px-border-soft">
           <div class="k">Wallet</div>
           <div class="v walletFit" id="wallet">Not connected</div>
         </div>
-        <div class="stat">
-          <div class="k">COM COIN balance</div>
+        <div class="stat px-border-soft">
+          <div class="k">$COMCOIN balance</div>
           <div class="v" id="balance">—</div>
         </div>
-        <div class="stat">
+        <div class="stat px-border-soft">
           <div class="k">Your rank</div>
           <div class="v" id="rank">—</div>
         </div>
@@ -268,22 +373,33 @@
 
       <div class="msg" id="msg"></div>
 
-      <div class="out" id="outCard">
-        <img id="outImg" alt="COM COIN output" />
+      <!-- OUTPUT (image WILL be placed here) -->
+      <div class="outWrap px-border-soft" id="outWrap">
+        <img class="outImg" id="outImg" alt="Generated meme" />
         <div class="outLine">
-          <div id="shillText">Post it with <b>#ComCoin</b> • get raiding 🫡</div>
-          <div class="chip" id="typeChip"></div>
+          <div id="shillText">POST IT • START SHILLING 🫡 • $COMCOIN</div>
+          <div class="chip" id="typeChip">TYPE: —</div>
         </div>
+      </div>
+
+      <div class="how px-border-soft" id="howBox">
+        <h3>How it works</h3>
+        <ol>
+          <li>CONNECT PHANTOM.</li>
+          <li>HOLD $COMCOIN → 1 GENERATION PER DAY.</li>
+          <li>SAVE IT + POST IT. START SHILLING 🫡</li>
+        </ol>
       </div>
     </div>
 
     <!-- RANK VIEW -->
-    <div class="stage hidden" id="viewRank">
-      <div class="scoreCard">
+    <div class="stage px-border hidden" id="viewRank">
+      <div class="scoreCard px-border-soft">
         <div class="rankBig" id="rankBig">—</div>
-        <div class="callout" id="rankCallout">Connect to see your holder level.</div>
-        <div style="height:12px"></div>
-        <div class="callout"><b>Levels:</b> Dust (0) • Hodler (1) • Shiller (1k) • Chad (10k) • Whale (100k)</div>
+        <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
+        <div class="levels">
+          LEVELS: DUST (0) • HODLER (1) • SHILLER (1K) • CHAD (10K) • WHALE (100K)
+        </div>
       </div>
     </div>
 

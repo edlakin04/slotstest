@@ -16,8 +16,6 @@
       --bg1:#062011;
 
       --panel: rgba(0,0,0,.38);
-      --panel2: rgba(0,0,0,.52);
-
       --border: rgba(180,255,210,.30);
       --border2: rgba(180,255,210,.18);
 
@@ -28,7 +26,6 @@
       --good:#2EE59D;
       --bad:#FF4D6D;
 
-      --shadow: 0 18px 70px rgba(0,0,0,.60);
       --pix: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
@@ -139,18 +136,24 @@
     .stage{
       margin-top: 16px;
       padding: 18px 16px 18px;
+      text-align:center;
     }
 
-    /* BIG gradient bouncing title */
+    /* BIG gradient bouncing title (CENTERED) */
     .bigTitle{
-      margin: 10px 0 14px;
+      margin: 10px auto 14px;
+      width: fit-content;
+      text-align: center;
+      display:block;
+
       font-size: clamp(18px, 3vw, 32px);
       letter-spacing: .18em;
       text-transform: uppercase;
       line-height: 1.2;
+
       text-shadow: 0 10px 0 rgba(0,0,0,.35);
-      display:inline-block;
       animation: bounce 1.25s ease-in-out infinite;
+
       background: linear-gradient(90deg, #C8FF00, #2EE59D, #00FFD1, #C8FF00);
       background-size: 240% 100%;
       -webkit-background-clip: text;
@@ -224,12 +227,13 @@
     .msg.ok{ color: rgba(46,229,157,.98); }
     .msg.bad{ color: rgba(255,77,109,.98); }
 
-    /* Output area always present, just hidden until used */
+    /* Output area where image shows */
     .outWrap{
       display:none;
       max-width: 980px;
       margin: 16px auto 0;
       padding: 14px 12px;
+      text-align:left;
     }
     .outImg{
       width:100%;
@@ -265,6 +269,7 @@
       max-width: 980px;
       margin: 16px auto 0;
       padding: 14px 12px;
+      text-align:left;
     }
     .how h3{
       margin: 0 0 10px;
@@ -280,6 +285,10 @@
       line-height: 2.0;
       font-size: 10px;
       letter-spacing:.08em;
+
+      /* keeps text inside border */
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
     .hidden{ display:none !important; }
@@ -373,7 +382,7 @@
 
       <div class="msg" id="msg"></div>
 
-      <!-- OUTPUT (image WILL be placed here) -->
+      <!-- OUTPUT (image is set into outImg by main.js) -->
       <div class="outWrap px-border-soft" id="outWrap">
         <img class="outImg" id="outImg" alt="Generated meme" />
         <div class="outLine">

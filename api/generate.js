@@ -1,6 +1,8 @@
-// /api/generate.js
-export default async function handler(req, res) {
-  // CORS (helps when testing)
+// api/generate.js
+const nacl = require("tweetnacl");
+const bs58 = require("bs58");
+
+module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -27,31 +29,28 @@ export default async function handler(req, res) {
     }
 
     // 1) Verify Phantom signature (ed25519)
-    const okSig = await verifySolanaSignature({ pubkey, message, signature });
-    if (!okSig) return json(res, 401, { error: "Signature verification failed" });
+    if (!verifySolanaSignature({ pubkey, message, signature })) {
+      return json(res, 401, { error: "Signature verification failed" });
+    }
 
-    // 2) Rate limit: 1 per day per wallet (UTC day)
+    // 2) Daily limit: 1/day per wallet (UTC)
     const today = new Date().toISOString().slice(0, 10);
     const limiterKey = `gen:${pubkey}:${today}`;
+
     const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
-    if (already) {
-      return json(res, 429, { error: "Daily limit reached: 1 generation per day" });
-    }
-    // set the limiter with 26h ttl (safe across TZ edge)
+    if (already) return json(res, 429, { error: "Daily limit reached: 1 generation per day" });
+
     await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
 
-    // 3) Token gate (TURN OFF FOR TESTING if you want)
-    // For testing, comment this entire block out
-    const uiAmount = await getUiTokenBalance({ rpcUrl, mint, owner: pubkey });
-    if (!(uiAmount > 0)) {
-      return json(res, 403, { error: "Not eligible: you do not hold $COMCOIN" });
+    // 3) Token gate (comment out for testing)
+
     }
 
-    // 4) Pick random type
+    // 4) Random type
     const types = ["animal", "tech billionaire", "celebrity", "politician"];
     const pick = types[Math.floor(Math.random() * types.length)];
 
-    // 5) Build prompt (this is the one you asked about)
+    // 5) Prompt
     const prompt = `
 Create a single square image in crisp 16-bit pixel art (retro SNES / Game Boy Color style).
 
@@ -79,27 +78,26 @@ Overall vibe:
 - Consistent layout, arcade-style presentation.
 `.trim();
 
-    // 6) Call OpenAI Images API
+    // 6) OpenAI Images
     const oaiResp = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "gpt-image-1",
         prompt,
         size: "1024x1024",
         output_format: "png"
-      }),
+      })
     });
 
     const rawText = await oaiResp.text();
-    let out;
-    try { out = JSON.parse(rawText); } catch { out = null; }
+    let out = null;
+    try { out = JSON.parse(rawText); } catch {}
 
     if (!oaiResp.ok) {
-      // return the REAL OpenAI error body so you can see it in the UI
       return json(res, 502, { error: `OpenAI error: ${rawText.slice(0, 900)}` });
     }
 
@@ -110,40 +108,27 @@ Overall vibe:
 
     return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
   } catch (err) {
-    // THIS is what turns a silent 500 into a useful message.
     return json(res, 500, {
       error: `Server error: ${err?.message || String(err)}`,
       stack: (err?.stack || "").slice(0, 1200)
     });
   }
-}
+};
 
 function json(res, status, obj) {
   res.status(status).setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(obj));
 }
 
-/** ---------------------------
- *  Signature verification
- *  ---------------------------
- * Phantom signMessage uses ed25519.
- * signature is base58 string.
- */
-async function verifySolanaSignature({ pubkey, message, signature }) {
-  // Use @noble/ed25519 (tiny) via dynamic import from esm.sh
-  const ed = await import("https://esm.sh/@noble/ed25519@2.1.0");
-  const bs58 = await import("https://esm.sh/bs58@5.0.0");
-
-  const sigBytes = bs58.default.decode(signature);
-  const pubBytes = bs58.default.decode(pubkey);
+function verifySolanaSignature({ pubkey, message, signature }) {
+  // Phantom returns signature bytes for the message bytes.
+  const sigBytes = bs58.decode(signature);
+  const pubBytes = bs58.decode(pubkey);
   const msgBytes = new TextEncoder().encode(message);
 
-  return await ed.verify(sigBytes, msgBytes, pubBytes);
+  return nacl.sign.detached.verify(msgBytes, sigBytes, pubBytes);
 }
 
-/** ---------------------------
- *  Upstash helpers
- *  --------------------------- */
 async function upstashGet(url, token, key) {
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -153,19 +138,15 @@ async function upstashGet(url, token, key) {
 }
 
 async function upstashSet(url, token, key, value, ttlSeconds) {
-  // SET key value EX ttl
-  const r = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const r = await fetch(
+    `${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
   const j = await r.json().catch(() => null);
   if (!r.ok) throw new Error(`Upstash SET failed: ${JSON.stringify(j)}`);
 }
 
-/** ---------------------------
- *  SPL token balance
- *  --------------------------- */
 async function getUiTokenBalance({ rpcUrl, mint, owner }) {
-  // getTokenAccountsByOwner + parse "uiAmount" from tokenAmount
   const payload = {
     jsonrpc: "2.0",
     id: 1,
@@ -182,8 +163,8 @@ async function getUiTokenBalance({ rpcUrl, mint, owner }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  const j = await r.json();
 
+  const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`RPC error HTTP ${r.status}`);
   if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error)}`);
 

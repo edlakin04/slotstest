@@ -1,25 +1,197 @@
-const oai = await fetch("https://api.openai.com/v1/images/generations", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${openaiKey}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    model: "gpt-image-1",         // or "gpt-image-1.5"
-    prompt,
-    size: "1024x1024",
-    output_format: "png",
-    quality: "high"
-  }),
-});
+// /api/generate.js
+export default async function handler(req, res) {
+  // CORS (helps when testing)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(204).end();
 
-if (!oai.ok) {
-  const errText = await oai.text();
-  return json(res, 502, { error: `OpenAI error: ${errText.slice(0, 700)}` });
+  try {
+    if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const rpcUrl = process.env.SOLANA_RPC_URL;
+    const mint = process.env.COMCOIN_MINT;
+    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+    if (!openaiKey) return json(res, 500, { error: "Missing OPENAI_API_KEY env var" });
+    if (!rpcUrl) return json(res, 500, { error: "Missing SOLANA_RPC_URL env var" });
+    if (!mint) return json(res, 500, { error: "Missing COMCOIN_MINT env var" });
+    if (!upstashUrl || !upstashToken) return json(res, 500, { error: "Missing Upstash env vars" });
+
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { pubkey, message, signature } = body || {};
+    if (!pubkey || !message || !signature) {
+      return json(res, 400, { error: "Missing pubkey/message/signature" });
+    }
+
+    // 1) Verify Phantom signature (ed25519)
+    const okSig = await verifySolanaSignature({ pubkey, message, signature });
+    if (!okSig) return json(res, 401, { error: "Signature verification failed" });
+
+    // 2) Rate limit: 1 per day per wallet (UTC day)
+    const today = new Date().toISOString().slice(0, 10);
+    const limiterKey = `gen:${pubkey}:${today}`;
+    const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
+    if (already) {
+      return json(res, 429, { error: "Daily limit reached: 1 generation per day" });
+    }
+    // set the limiter with 26h ttl (safe across TZ edge)
+    await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
+
+    // 3) Token gate (TURN OFF FOR TESTING if you want)
+    // For testing, comment this entire block out
+    const uiAmount = await getUiTokenBalance({ rpcUrl, mint, owner: pubkey });
+    if (!(uiAmount > 0)) {
+      return json(res, 403, { error: "Not eligible: you do not hold $COMCOIN" });
+    }
+
+    // 4) Pick random type
+    const types = ["animal", "tech billionaire", "celebrity", "politician"];
+    const pick = types[Math.floor(Math.random() * types.length)];
+
+    // 5) Build prompt (this is the one you asked about)
+    const prompt = `
+Create a single square image in crisp 16-bit pixel art (retro SNES / Game Boy Color style).
+
+Subject:
+- TYPE: ${pick}
+- Choose a single well-known representative that fits this type and depict them as a stylized pixel-art character or creature.
+- The depiction must be recognizable but NOT photorealistic.
+
+Style rules:
+- Limited color palette (12–20 colors)
+- Sharp pixel edges, subtle dithering
+- High contrast, clean silhouette
+- Simple, uncluttered background
+
+Text rules (VERY IMPORTANT):
+- Overlay pixelated retro video-game text at the very bottom of the image that reads EXACTLY:
+  "COM COIN"
+- Text must be all caps, blocky pixel font, clearly readable.
+- The text should slightly overlap the background but NOT cover the subject’s face.
+- No other text anywhere in the image.
+- No logos, no watermarks.
+
+Overall vibe:
+- Looks like a collectible retro game character card.
+- Consistent layout, arcade-style presentation.
+`.trim();
+
+    // 6) Call OpenAI Images API
+    const oaiResp = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openaiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-image-1",
+        prompt,
+        size: "1024x1024",
+        output_format: "png"
+      }),
+    });
+
+    const rawText = await oaiResp.text();
+    let out;
+    try { out = JSON.parse(rawText); } catch { out = null; }
+
+    if (!oaiResp.ok) {
+      // return the REAL OpenAI error body so you can see it in the UI
+      return json(res, 502, { error: `OpenAI error: ${rawText.slice(0, 900)}` });
+    }
+
+    const b64 = out?.data?.[0]?.b64_json;
+    if (!b64) {
+      return json(res, 502, { error: `OpenAI returned no b64_json. Raw: ${rawText.slice(0, 900)}` });
+    }
+
+    return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
+  } catch (err) {
+    // THIS is what turns a silent 500 into a useful message.
+    return json(res, 500, {
+      error: `Server error: ${err?.message || String(err)}`,
+      stack: (err?.stack || "").slice(0, 1200)
+    });
+  }
 }
 
-const out = await oai.json();
-const b64 = out?.data?.[0]?.b64_json;  // GPT Image returns base64 here
-if (!b64) return json(res, 502, { error: "OpenAI did not return b64_json image data" });
+function json(res, status, obj) {
+  res.status(status).setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(obj));
+}
 
-return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
+/** ---------------------------
+ *  Signature verification
+ *  ---------------------------
+ * Phantom signMessage uses ed25519.
+ * signature is base58 string.
+ */
+async function verifySolanaSignature({ pubkey, message, signature }) {
+  // Use @noble/ed25519 (tiny) via dynamic import from esm.sh
+  const ed = await import("https://esm.sh/@noble/ed25519@2.1.0");
+  const bs58 = await import("https://esm.sh/bs58@5.0.0");
+
+  const sigBytes = bs58.default.decode(signature);
+  const pubBytes = bs58.default.decode(pubkey);
+  const msgBytes = new TextEncoder().encode(message);
+
+  return await ed.verify(sigBytes, msgBytes, pubBytes);
+}
+
+/** ---------------------------
+ *  Upstash helpers
+ *  --------------------------- */
+async function upstashGet(url, token, key) {
+  const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const j = await r.json().catch(() => null);
+  return j?.result ?? null;
+}
+
+async function upstashSet(url, token, key, value, ttlSeconds) {
+  // SET key value EX ttl
+  const r = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(`Upstash SET failed: ${JSON.stringify(j)}`);
+}
+
+/** ---------------------------
+ *  SPL token balance
+ *  --------------------------- */
+async function getUiTokenBalance({ rpcUrl, mint, owner }) {
+  // getTokenAccountsByOwner + parse "uiAmount" from tokenAmount
+  const payload = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "getTokenAccountsByOwner",
+    params: [
+      owner,
+      { mint },
+      { encoding: "jsonParsed" }
+    ]
+  };
+
+  const r = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json();
+
+  if (!r.ok) throw new Error(`RPC error HTTP ${r.status}`);
+  if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error)}`);
+
+  const accounts = j?.result?.value || [];
+  let total = 0;
+  for (const acc of accounts) {
+    const uiAmount = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
+    if (typeof uiAmount === "number") total += uiAmount;
+  }
+  return total;
+}

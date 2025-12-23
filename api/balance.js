@@ -10,7 +10,6 @@ export default async function handler(req, res) {
     if (!RPC) return json(res, 500, { error: "Missing env var: HELIUS_RPC_URL" });
     if (!MINT) return json(res, 500, { error: "Missing env var: COMCOIN_MINT" });
 
-    // Use getTokenAccountsByOwner to find token accounts for this mint
     const r = await fetch(RPC, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -33,7 +32,6 @@ export default async function handler(req, res) {
     const accounts = data?.result?.value || [];
     let uiAmount = 0;
 
-    // Sum across accounts (usually 1)
     for (const acc of accounts) {
       const amt = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
       uiAmount += Number(amt || 0);

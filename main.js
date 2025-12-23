@@ -275,12 +275,13 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     if (!res.ok) throw new Error(data?.error || rawText || `HTTP ${res.status}`);
 
-    // ✅ accept both camelCase and snake_case
+    // For PRIVATE bucket mode we expect:
+    // { imageUrl: SIGNED_URL, cardId, name, imagePath }
+    // (still supports old b64 fallback)
     const urlFromApi = data?.imageUrl || data?.image_url || null;
 
     let imgSrc = null;
     if (urlFromApi) {
-      // ✅ cache-bust so it always loads fresh
       imgSrc = `${urlFromApi}${urlFromApi.includes("?") ? "&" : "?"}v=${Date.now()}`;
     } else if (data?.image_b64) {
       imgSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
@@ -294,7 +295,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     if (outImg) {
       outImg.onerror = () => {
-        setMsg("IMAGE SAVED BUT CAN’T LOAD IT. MAKE SUPABASE BUCKET PUBLIC.", "bad");
+        setMsg("IMAGE SAVED BUT CAN’T LOAD IT. SIGNED URL FAILED.", "bad");
       };
       outImg.src = lastImageSrc;
     }
@@ -428,7 +429,8 @@ function renderCards(container, items, opts = {}) {
     const img = document.createElement("img");
     img.className = "cardImg";
     img.alt = it.name || "COM CARD";
-    img.src = it.image_url || it.imageUrl || "";
+    // ✅ PRIVATE mode: backend returns signed URL as imageUrl
+    img.src = it.imageUrl || it.image_url || "";
     card.appendChild(img);
 
     const name = document.createElement("div");
@@ -608,7 +610,8 @@ async function loadRankCards() {
     for (const it of items.slice(0, 24)) {
       const img = document.createElement("img");
       img.className = "miniThumb";
-      img.src = it.image_url || "";
+      // ✅ PRIVATE mode: prefer signed url
+      img.src = it.imageUrl || it.image_url || "";
       img.alt = it.name || "COM CARD";
       img.onclick = async () => {
         showView("cards");

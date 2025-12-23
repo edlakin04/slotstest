@@ -14,6 +14,7 @@ const elMsg = document.getElementById("msg");
 const outCard = document.getElementById("outCard");
 const outImg = document.getElementById("outImg");
 const shillText = document.getElementById("shillText");
+const typeChip = document.getElementById("typeChip");
 
 let publicKeyBase58 = null;
 let lastImageSrc = null;
@@ -31,11 +32,12 @@ function getRank(amount) {
 }
 
 function setMsg(text, kind = "muted") {
-  if (!elMsg) return;
   elMsg.classList.remove("ok", "bad");
   if (kind === "ok") elMsg.classList.add("ok");
   if (kind === "bad") elMsg.classList.add("bad");
   elMsg.textContent = text || "";
+  // also log for debugging
+  if (kind === "bad") console.error(text);
 }
 
 function requirePhantom() {
@@ -63,16 +65,16 @@ async function refreshBalance() {
   elBalance.textContent = amt.toLocaleString("en-GB");
   elRank.textContent = getRank(amt).name;
 
-  const eligible = amt >= 0;
+  const eligible = amt >= 0; // <-- minimum required to generate
   btnGenerate.disabled = !eligible;
 
   setMsg(
-    eligible ? "Eligible. Pull your daily pixel meme." : "Not eligible yet. Hold COM COIN to unlock daily generation.",
+    eligible ? "Eligible. Hit GENERATE." : "Not eligible yet — hold COM COIN to unlock the daily pull.",
     eligible ? "ok" : "muted"
   );
 }
 
-btnConnect?.addEventListener("click", async () => {
+btnConnect.addEventListener("click", async () => {
   try {
     const provider = requirePhantom();
     const resp = await provider.connect();
@@ -88,10 +90,9 @@ btnConnect?.addEventListener("click", async () => {
   }
 });
 
-btnDisconnect?.addEventListener("click", async () => {
+btnDisconnect.addEventListener("click", async () => {
   try {
-    const provider = requirePhantom();
-    await provider.disconnect();
+    await requirePhantom().disconnect();
   } catch {}
 
   publicKeyBase58 = null;
@@ -112,15 +113,15 @@ btnDisconnect?.addEventListener("click", async () => {
   setMsg("");
 });
 
-btnGenerate?.addEventListener("click", async () => {
+btnGenerate.addEventListener("click", async () => {
   try {
     if (!publicKeyBase58) throw new Error("Connect Phantom first.");
 
     btnGenerate.disabled = true;
     btnCopyTweet.disabled = true;
     btnDownload.disabled = true;
-    setMsg("Signing message…");
 
+    setMsg("Signing message…");
     const provider = requirePhantom();
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
     const message = `COM COIN daily meme | ${today} | I own this wallet`;
@@ -129,8 +130,7 @@ btnGenerate?.addEventListener("click", async () => {
     const signed = await provider.signMessage(encoded, "utf8");
     const signatureB58 = bs58.encode(signed.signature);
 
-    setMsg("Generating image… (this can take a bit)");
-
+    setMsg("Generating image…");
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -138,44 +138,53 @@ btnGenerate?.addEventListener("click", async () => {
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || "Generate failed.");
+    if (!res.ok) {
+      // show the real error
+      throw new Error(data?.error || `Generate failed (HTTP ${res.status})`);
+    }
 
     const mime = data.mime || "image/png";
     lastImageSrc = `data:${mime};base64,${data.image_b64}`;
+
     outImg.src = lastImageSrc;
-
-    const lines = [
-      "Post it on Twitter with #ComCoin.",
-      "Start shilling 🫡",
-      "(Bonus points if you pin it.)"
-    ];
-    if (shillText) shillText.textContent = lines.join(" ");
-
     outCard.style.display = "block";
-    setMsg(`Done. You pulled: ${data.type}. Go farm the timeline.`, "ok");
 
+    if (typeChip) typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "";
+
+    if (shillText) {
+      shillText.innerHTML = `<b>Now:</b> post it with <span class="mono">#ComCoin</span> • start shilling 🫡`;
+    }
+
+    setMsg("Image ready. Save it + post it.", "ok");
     btnCopyTweet.disabled = false;
     btnDownload.disabled = false;
 
   } catch (e) {
     setMsg(e?.message || String(e), "bad");
   } finally {
+    // re-check eligibility (and daily limit is enforced server-side)
     await refreshBalance();
   }
 });
 
-btnCopyTweet?.addEventListener("click", async () => {
+btnCopyTweet.addEventListener("click", async () => {
   const text = `My COM COIN daily pull is in. #ComCoin start shilling 🫡`;
   await navigator.clipboard.writeText(text);
-  setMsg("Tweet text copied.", "ok");
+  setMsg("Tweet copied.", "ok");
 });
 
-btnDownload?.addEventListener("click", async () => {
+btnDownload.addEventListener("click", async () => {
   if (!lastImageSrc) return;
+
+  // Best-effort "save" for both desktop and mobile:
+  // - Desktop: anchor download works
+  // - Some mobile browsers: opens image; user taps Save/Share
   const a = document.createElement("a");
   a.href = lastImageSrc;
   a.download = `comcoin-${Date.now()}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
+
+  setMsg("If your phone opens the image, use Share/Save to Photos.", "ok");
 });

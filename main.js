@@ -240,7 +240,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
         : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
   }
 
-  const eligible = amt > 0; // set >=0 for testing if you want
+  const eligible = amt >= 0; // set >=0 for testing if you want
   if (btnGenerate) btnGenerate.disabled = !eligible;
 
   if (!quiet) {

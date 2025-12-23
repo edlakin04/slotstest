@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8" />
 
-  <!-- IMPORTANT: forces the site to look the same on phone (just scaled down),
-       NOT reflowed / squeezed into a mobile layout -->
+  <!-- Force same layout on phone (scaled down, not reflowed) -->
   <meta name="viewport" content="width=1050, initial-scale=1" />
 
   <title>COM COIN — Start Shilling Today</title>
@@ -18,7 +17,6 @@
       --bg0:#04160B;
       --bg1:#062011;
 
-      /* UI solid (not see-through) */
       --uiSolid: rgba(0,0,0,.92);
       --panelSolid: rgba(0,0,0,.92);
 
@@ -32,7 +30,6 @@
 
       --pix: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-      /* background motion */
       --bgShiftY: 0px;
     }
 
@@ -45,7 +42,6 @@
       font-family: var(--pix);
       image-rendering: pixelated;
 
-      /* keep the same layout everywhere */
       min-width: 1050px;
 
       overflow-x:hidden;
@@ -53,15 +49,12 @@
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* This is ONLY to give scroll distance.
-       We will "loop" the scroll position with JS so it never ends. */
     .scrollSpace{
       height: 500vh;
       pointer-events:none;
       opacity:0;
     }
 
-    /* Fixed UI shell so it stays still */
     .ui{
       position: fixed;
       inset: 0;
@@ -73,7 +66,6 @@
 
     .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
 
-    /* Background base */
     .bg{
       position: fixed;
       inset: 0;
@@ -88,7 +80,6 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    /* BIG BRIGHT SOLID $ LAYER (endless) */
     .bgDollars{
       position: fixed;
       inset: 0;
@@ -97,12 +88,11 @@
       overflow:hidden;
     }
 
-    /* Two identical fields = seamless tiling */
     .dollarField{
       position:absolute;
       left:0; right:0;
       width:100%;
-      height: 220vh; /* used by JS loop constant */
+      height: 220vh;
       transform: translateY(var(--bgShiftY));
       will-change: transform;
     }
@@ -112,7 +102,7 @@
     .dollar{
       position:absolute;
       font-family: var(--pix);
-      color: #00FF57;              /* solid bright green */
+      color: #00FF57;
       text-shadow:
         0 12px 0 rgba(0,0,0,.45),
         0 0 34px rgba(0,255,87,.22);
@@ -121,7 +111,6 @@
       user-select:none;
     }
 
-    /* Pixel UI helpers (SOLID) */
     .px-border{
       border: 4px solid var(--border);
       box-shadow:
@@ -411,7 +400,6 @@
 <body>
   <div class="bg"></div>
 
-  <!-- Endless $ scroll background -->
   <div class="bgDollars" aria-hidden="true">
     <!-- Field A -->
     <div class="dollarField fieldA">
@@ -458,7 +446,6 @@
     </div>
   </div>
 
-  <!-- Fixed UI -->
   <div class="ui">
     <div class="wrap">
 
@@ -524,18 +511,9 @@
         <div class="how px-border-soft" id="howBox">
           <h3>How it works</h3>
           <ul class="steps">
-            <li class="step">
-              <div class="stepNum">1.</div>
-              <div class="stepTxt">CONNECT PHANTOM.</div>
-            </li>
-            <li class="step">
-              <div class="stepNum">2.</div>
-              <div class="stepTxt">HOLD $COMCOIN → 1 GENERATION PER DAY.</div>
-            </li>
-            <li class="step">
-              <div class="stepNum">3.</div>
-              <div class="stepTxt">SAVE IT + POST IT. START SHILLING 🫡</div>
-            </li>
+            <li class="step"><div class="stepNum">1.</div><div class="stepTxt">CONNECT PHANTOM.</div></li>
+            <li class="step"><div class="stepNum">2.</div><div class="stepTxt">HOLD $COMCOIN → 1 GENERATION PER DAY.</div></li>
+            <li class="step"><div class="stepNum">3.</div><div class="stepTxt">SAVE IT + POST IT. START SHILLING 🫡</div></li>
           </ul>
         </div>
       </div>
@@ -551,40 +529,31 @@
     </div>
   </div>
 
-  <!-- Invisible scroll driver -->
   <div class="scrollSpace"></div>
 
   <script>
-    /**
-     * TRUE INFINITE SCROLL LOOP:
-     * - We keep the page scroll position bouncing inside a middle band.
-     * - When you get near the top or bottom, we jump you back into the middle
-     *   WITHOUT changing what you see (background is wrapped).
-     *
-     * Works on desktop + mobile.
-     */
+    // TRUE INFINITE LOOP (keeps scroll position inside a middle band)
     const root = document.documentElement;
 
     function fieldLoopPx() {
-      // 220vh in px, must match .dollarField height
-      return window.innerHeight * 2.2;
+      return window.innerHeight * 2.2; // 220vh
     }
 
     function setBgFromScroll(y) {
-      // Background moves same direction as scroll but slower, and wraps forever.
       const loopPx = fieldLoopPx();
-      const raw = y * 0.6;
+
+      // ✅ direction swapped here (negative sign)
+      const raw = -y * 0.6;
+
       const wrapped = ((raw % loopPx) + loopPx) % loopPx;
       root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }
 
     function ensureInfiniteScroll() {
-      // total scroll height band for looping
       const maxY = document.documentElement.scrollHeight - window.innerHeight;
       const y = window.scrollY || 0;
+      const margin = 400;
 
-      // keep user in a "safe zone"
-      const margin = 400; // px
       if (y < margin) {
         window.scrollTo(0, y + (maxY - 2*margin));
       } else if (y > maxY - margin) {
@@ -594,7 +563,6 @@
       setBgFromScroll(window.scrollY || 0);
     }
 
-    // Start in the middle so you can scroll both ways forever
     function initLoop() {
       const maxY = document.documentElement.scrollHeight - window.innerHeight;
       const middle = Math.max(0, Math.floor(maxY / 2));
@@ -613,7 +581,6 @@
     }, { passive: true });
 
     window.addEventListener("resize", () => {
-      // keep it stable on rotate/resizes
       setBgFromScroll(window.scrollY || 0);
     });
 

@@ -1,17 +1,32 @@
-// api/generate.js
-const nacl = require("tweetnacl");
-const bs58 = require("bs58");
-const { TextEncoder } = require("util");
+export const config = {
+  runtime: "nodejs"
+};
 
-module.exports = async function handler(req, res) {
-  // CORS
+function j(res, code, obj) {
+  res.statusCode = code;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(obj));
+}
+
+function safeJson(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+export default async function handler(req, res) {
+  // CORS for testing
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (req.method === "OPTIONS") return res.status(204).end();
 
   try {
-    if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+    if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
+
+    // Load deps safely (won't crash at module load time)
+    const naclMod = await import("tweetnacl");
+    const bs58Mod = await import("bs58");
+    const nacl = naclMod.default ?? naclMod;
+    const bs58 = bs58Mod.default ?? bs58Mod;
 
     const openaiKey = process.env.OPENAI_API_KEY;
     const rpcUrl = process.env.SOLANA_RPC_URL;
@@ -19,40 +34,41 @@ module.exports = async function handler(req, res) {
     const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
     const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    if (!openaiKey) return json(res, 500, { stage: "env", error: "Missing OPENAI_API_KEY env var" });
-    if (!rpcUrl) return json(res, 500, { stage: "env", error: "Missing SOLANA_RPC_URL env var" });
-    if (!mint) return json(res, 500, { stage: "env", error: "Missing COMCOIN_MINT env var" });
-    if (!upstashUrl || !upstashToken) return json(res, 500, { stage: "env", error: "Missing Upstash env vars" });
+    if (!openaiKey) return j(res, 500, { stage: "env", error: "Missing OPENAI_API_KEY" });
+    if (!rpcUrl) return j(res, 500, { stage: "env", error: "Missing SOLANA_RPC_URL" });
+    if (!mint) return j(res, 500, { stage: "env", error: "Missing COMCOIN_MINT" });
+    if (!upstashUrl || !upstashToken) return j(res, 500, { stage: "env", error: "Missing UPSTASH env vars" });
 
     const body = typeof req.body === "string" ? safeJson(req.body) : req.body;
     const { pubkey, message, signature } = body || {};
     if (!pubkey || !message || !signature) {
-      return json(res, 400, { stage: "input", error: "Missing pubkey/message/signature" });
+      return j(res, 400, { stage: "input", error: "Missing pubkey/message/signature" });
     }
 
-    // 1) Verify Phantom signature
-    if (!verifySolanaSignature({ pubkey, message, signature })) {
-      return json(res, 401, { stage: "sig", error: "Signature verification failed" });
-    }
+    // Verify signature
+    const sigBytes = bs58.decode(signature);
+    const pubBytes = bs58.decode(pubkey);
+    const msgBytes = new TextEncoder().encode(message);
 
-    // 2) Daily limit
+    const ok = nacl.sign.detached.verify(msgBytes, sigBytes, pubBytes);
+    if (!ok) return j(res, 401, { stage: "sig", error: "Signature verification failed" });
+
+    // Daily limit
     const today = new Date().toISOString().slice(0, 10);
     const limiterKey = `gen:${pubkey}:${today}`;
 
     const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
-    if (already) return json(res, 429, { stage: "limit", error: "Daily limit reached: 1 generation per day" });
+    if (already) return j(res, 429, { stage: "limit", error: "Daily limit reached (1/day)" });
 
     await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
 
-    // 3) Token gate (comment out for testing)
-  
-    }
+    // Token gate (comment out for testing)
+    // const uiAmount = await getUiTokenBalance({ rpcUrl, mint, owner: pubkey });
+    // if (!(uiAmount > 0)) return j(res, 403, { stage: "gate", error: "Not eligible: hold $COMCOIN" });
 
-    // 4) Random type
     const types = ["animal", "tech billionaire", "celebrity", "politician"];
     const pick = types[Math.floor(Math.random() * types.length)];
 
-    // 5) Prompt
     const prompt = `
 Create a single square image in crisp 16-bit pixel art (retro SNES / Game Boy Color style).
 
@@ -74,17 +90,12 @@ Text rules (VERY IMPORTANT):
 - The text should slightly overlap the background but NOT cover the subject’s face.
 - No other text anywhere in the image.
 - No logos, no watermarks.
-
-Overall vibe:
-- Looks like a collectible retro game character card.
-- Consistent layout, arcade-style presentation.
 `.trim();
 
-    // 6) OpenAI Images
     const oaiResp = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openaiKey}`,
+        Authorization: `Bearer ${openaiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -95,90 +106,39 @@ Overall vibe:
       })
     });
 
-    const rawText = await oaiResp.text();
-    const out = safeJson(rawText);
+    const raw = await oaiResp.text();
+    const out = safeJson(raw);
 
-    if (!oaiResp.ok) {
-      return json(res, 502, { stage: "openai", error: `OpenAI error: ${rawText.slice(0, 900)}` });
-    }
+    if (!oaiResp.ok) return j(res, 502, { stage: "openai", error: raw.slice(0, 900) });
 
     const b64 = out?.data?.[0]?.b64_json;
-    if (!b64) {
-      return json(res, 502, { stage: "openai", error: `OpenAI returned no b64_json. Raw: ${rawText.slice(0, 900)}` });
-    }
+    if (!b64) return j(res, 502, { stage: "openai", error: "No b64_json returned", raw: raw.slice(0, 500) });
 
-    return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
+    return j(res, 200, { image_b64: b64, mime: "image/png", type: pick });
+
   } catch (err) {
-    return json(res, 500, {
+    return j(res, 500, {
       stage: "catch",
-      error: `Server error: ${err?.message || String(err)}`,
-      stack: (err?.stack || "").slice(0, 1400)
+      error: err?.message || String(err),
+      stack: (err?.stack || "").slice(0, 1200)
     });
   }
-};
-
-function json(res, status, obj) {
-  res.status(status).setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(obj));
-}
-
-function safeJson(s) {
-  try { return JSON.parse(s); } catch { return null; }
-}
-
-function verifySolanaSignature({ pubkey, message, signature }) {
-  const sigBytes = bs58.decode(signature);
-  const pubBytes = bs58.decode(pubkey);
-  const msgBytes = new TextEncoder().encode(message);
-  return nacl.sign.detached.verify(msgBytes, sigBytes, pubBytes);
 }
 
 async function upstashGet(url, token, key) {
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  const txt = await r.text();
-  const j = safeJson(txt);
-  if (!r.ok) throw new Error(`Upstash GET HTTP ${r.status}: ${txt.slice(0, 400)}`);
+  const t = await r.text();
+  const j = safeJson(t);
+  if (!r.ok) throw new Error(`Upstash GET HTTP ${r.status}: ${t.slice(0, 200)}`);
   return j?.result ?? null;
 }
 
 async function upstashSet(url, token, key, value, ttlSeconds) {
-  const r = await fetch(
-    `${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-  const txt = await r.text();
-  const j = safeJson(txt);
-  if (!r.ok) throw new Error(`Upstash SET HTTP ${r.status}: ${txt.slice(0, 400)}`);
-  if (j?.error) throw new Error(`Upstash SET error: ${txt.slice(0, 400)}`);
-}
-
-async function getUiTokenBalance({ rpcUrl, mint, owner }) {
-  const payload = {
-    jsonrpc: "2.0",
-    id: 1,
-    method: "getTokenAccountsByOwner",
-    params: [owner, { mint }, { encoding: "jsonParsed" }]
-  };
-
-  const r = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+  const r = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`, {
+    headers: { Authorization: `Bearer ${token}` }
   });
-
-  const txt = await r.text();
-  const j = safeJson(txt);
-
-  if (!r.ok) throw new Error(`RPC HTTP ${r.status}: ${txt.slice(0, 400)}`);
-  if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error).slice(0, 400)}`);
-
-  const accounts = j?.result?.value || [];
-  let total = 0;
-  for (const acc of accounts) {
-    const uiAmount = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
-    if (typeof uiAmount === "number") total += uiAmount;
-  }
-  return total;
+  const t = await r.text();
+  if (!r.ok) throw new Error(`Upstash SET HTTP ${r.status}: ${t.slice(0, 200)}`);
 }

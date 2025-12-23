@@ -32,37 +32,16 @@ const RANKS = [
   { name: "Hodler", min: 1 },
   { name: "Shiller", min: 1_000 },
   { name: "Chad", min: 10_000 },
-  { name: "Whale", min: 100_000 },
+  { name: "Whale", min: 100_000 }
 ];
 
-function getRank(amount) {
-  return [...RANKS].reverse().find(r => amount >= r.min) ?? RANKS[0];
-}
-function nextRank(amount) {
-  return RANKS.find(r => r.min > amount) || null;
-}
+/* ---------------- UI helpers ---------------- */
 
-function setMsg(text, kind = "muted") {
+function setMsg(text = "", kind = "") {
   elMsg.classList.remove("ok", "bad");
   if (kind === "ok") elMsg.classList.add("ok");
   if (kind === "bad") elMsg.classList.add("bad");
-  elMsg.textContent = text || "";
-}
-
-function requirePhantom() {
-  const provider = window?.solana;
-  if (!provider?.isPhantom) throw new Error("PHANTOM NOT FOUND. INSTALL PHANTOM AND REFRESH.");
-  return provider;
-}
-
-function setConnectedUI(connected) {
-  btnConnect.disabled = connected;
-  btnDisconnect.disabled = !connected;
-  if (!connected) {
-    btnGenerate.disabled = true;
-    btnCopyTweet.disabled = true;
-    btnDownload.disabled = true;
-  }
+  elMsg.textContent = text;
 }
 
 function showView(which) {
@@ -76,49 +55,31 @@ function showView(which) {
 tabGen.onclick = () => showView("gen");
 tabRank.onclick = () => showView("rank");
 
-async function refreshBalanceAndRank({ quiet = false } = {}) {
-  if (!publicKeyBase58) return;
+function requirePhantom() {
+  const p = window?.solana;
+  if (!p?.isPhantom) throw new Error("PHANTOM WALLET NOT FOUND");
+  return p;
+}
 
-  if (!quiet) setMsg("CHECKING $COMCOIN BALANCE…");
-
-  const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    if (!quiet) setMsg((data?.error || "BALANCE CHECK FAILED.").toUpperCase(), "bad");
-    elBalance.textContent = "—";
-    elRank.textContent = "—";
-    rankBig.textContent = "—";
-    rankCallout.textContent = "BALANCE CHECK FAILED.";
+function setConnectedUI(connected) {
+  btnConnect.disabled = connected;
+  btnDisconnect.disabled = !connected;
+  if (!connected) {
     btnGenerate.disabled = true;
-    return;
-  }
-
-  const amt = Number(data.uiAmount || 0);
-  elBalance.textContent = amt.toLocaleString("en-GB");
-
-  const r = getRank(amt);
-  elRank.textContent = r.name;
-  rankBig.textContent = r.name;
-
-  const n = nextRank(amt);
-  if (amt <= 0) {
-    rankCallout.innerHTML = `YOU OWN <b>NO $COMCOIN</b>. BUY SOME TO RANK UP.`;
-  } else {
-    rankCallout.innerHTML = `YOU ARE <b>${r.name}</b>. NEXT: <b>${n ? n.name : "MAXED"}</b>.`;
-  }
-
-  const eligible = amt >= 0; // set to (amt >= 0) for testing
-  btnGenerate.disabled = !eligible;
-
-  // ✅ IMPORTANT: only set the “eligible” message if not quiet
-  if (!quiet) {
-    setMsg(
-      eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE (1/DAY).",
-      eligible ? "ok" : "muted"
-    );
+    btnCopyTweet.disabled = true;
+    btnDownload.disabled = true;
   }
 }
+
+function getRank(amount) {
+  return [...RANKS].reverse().find(r => amount >= r.min) || RANKS[0];
+}
+
+function nextRank(amount) {
+  return RANKS.find(r => r.min > amount) || null;
+}
+
+/* ---------------- Wallet ---------------- */
 
 async function connectPhantom(opts) {
   const provider = requirePhantom();
@@ -133,7 +94,7 @@ btnConnect.onclick = async () => {
   try {
     await connectPhantom();
   } catch (e) {
-    setMsg(String(e?.message || e).toUpperCase(), "bad");
+    setMsg(e.message, "bad");
   }
 };
 
@@ -141,92 +102,135 @@ btnDisconnect.onclick = async () => {
   try { await requirePhantom().disconnect(); } catch {}
   publicKeyBase58 = null;
 
-  elWallet.textContent = "NOT CONNECTED";
+  elWallet.textContent = "Not connected";
   elBalance.textContent = "—";
   elRank.textContent = "—";
   rankBig.textContent = "—";
   rankCallout.textContent = "CONNECT TO SEE YOUR HOLDER LEVEL.";
 
-  setConnectedUI(false);
-
   outWrap.style.display = "none";
   outImg.removeAttribute("src");
   lastImageSrc = null;
 
+  setConnectedUI(false);
   setMsg("");
 };
 
+/* ---------------- Balance + Rank ---------------- */
+
+async function refreshBalanceAndRank({ quiet = false } = {}) {
+  if (!publicKeyBase58) return;
+
+  if (!quiet) setMsg("CHECKING $COMCOIN BALANCE…");
+
+  const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch {}
+
+  if (!res.ok) {
+    if (!quiet) setMsg(data?.error || text || "BALANCE CHECK FAILED", "bad");
+    btnGenerate.disabled = true;
+    return;
+  }
+
+  const amt = Number(data.uiAmount || 0);
+  elBalance.textContent = amt.toLocaleString("en-GB");
+
+  const r = getRank(amt);
+  elRank.textContent = r.name;
+  rankBig.textContent = r.name;
+
+  const n = nextRank(amt);
+  rankCallout.textContent =
+    amt <= 0
+      ? "YOU OWN NO $COMCOIN. BUY SOME TO RANK UP."
+      : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
+
+  const eligible = amt >= 0; // set to true or >=0 for testing
+  btnGenerate.disabled = !eligible;
+
+  if (!quiet) {
+    setMsg(
+      eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE.",
+      eligible ? "ok" : ""
+    );
+  }
+}
+
+/* ---------------- Generate ---------------- */
+
 btnGenerate.onclick = async () => {
   try {
-    if (!publicKeyBase58) throw new Error("CONNECT PHANTOM FIRST.");
-
-    // keep output visible if it already exists; otherwise hide until we have a result
-    if (!lastImageSrc) outWrap.style.display = "none";
+    if (!publicKeyBase58) throw new Error("CONNECT WALLET FIRST");
 
     btnGenerate.disabled = true;
     btnCopyTweet.disabled = true;
     btnDownload.disabled = true;
 
-    setMsg("SIGNING…");
+    setMsg("SIGN MESSAGE…");
+
     const provider = requirePhantom();
     const today = new Date().toISOString().slice(0, 10);
-    const message = `COM COIN daily meme | ${today} | I own this wallet`;
+    const message = `COM COIN daily meme | ${today}`;
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
-    const signatureB58 = bs58.encode(signed.signature);
+    const signature = bs58.encode(signed.signature);
 
     setMsg("GENERATING IMAGE…");
 
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature: signatureB58 })
+      body: JSON.stringify({
+        pubkey: publicKeyBase58,
+        message,
+        signature
+      })
     });
 
-    const data = await res.json().catch(() => ({}));
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch {}
 
-    // Debug: if it fails you will SEE it now (no overwrite)
     if (!res.ok) {
-      console.error("GENERATE FAILED:", res.status, data);
-      throw new Error((data?.error || `GENERATE FAILED (HTTP ${res.status})`).toString());
+      throw new Error(data?.error || text || `HTTP ${res.status}`);
     }
 
-    const b64 = data.image_b64;
-    if (!b64) {
-      console.error("NO image_b64 in response:", data);
-      throw new Error("NO IMAGE DATA RETURNED FROM SERVER.");
+    if (!data?.image_b64) {
+      throw new Error("NO IMAGE DATA RETURNED");
     }
 
-    const mime = data.mime || "image/png";
-    lastImageSrc = `data:${mime};base64,${b64}`;
+    lastImageSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
 
-    // ✅ THIS IS THE DISPLAY: set src + show container
     outImg.src = lastImageSrc;
     outWrap.style.display = "block";
 
-    typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "TYPE: ???";
-    shillText.textContent = "POST IT • START SHILLING 🫡 • $COMCOIN";
+    typeChip.textContent = `TYPE: ${String(data.type || "").toUpperCase()}`;
+    shillText.textContent = "START SHILLING TODAY • $COMCOIN";
 
-    setMsg("GENERATED. SAVE IT + POST IT.", "ok");
     btnCopyTweet.disabled = false;
     btnDownload.disabled = false;
 
+    setMsg("GENERATED. SAVE IT + POST IT.", "ok");
   } catch (e) {
-    setMsg(String(e?.message || e).toUpperCase(), "bad");
+    setMsg(String(e.message || e), "bad");
   } finally {
-    // ✅ IMPORTANT: update numbers/buttons without overwriting the “GENERATED/ERROR” message
     await refreshBalanceAndRank({ quiet: true });
   }
 };
 
+/* ---------------- Extras ---------------- */
+
 btnCopyTweet.onclick = async () => {
-  const text = `MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡`;
-  await navigator.clipboard.writeText(text);
+  await navigator.clipboard.writeText(
+    "MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡"
+  );
   setMsg("TWEET COPIED.", "ok");
 };
 
-btnDownload.onclick = async () => {
+btnDownload.onclick = () => {
   if (!lastImageSrc) return;
   const a = document.createElement("a");
   a.href = lastImageSrc;
@@ -234,10 +238,10 @@ btnDownload.onclick = async () => {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setMsg("IF MOBILE OPENS IMAGE: SHARE → SAVE.", "ok");
 };
 
-// Auto-reconnect on load
+/* ---------------- Auto reconnect ---------------- */
+
 (async function autoReconnect() {
   try {
     const provider = window?.solana;

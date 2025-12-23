@@ -3,50 +3,288 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Com Coin — Daily Pixel Meme</title>
+  <title>COM COIN — Daily Pixel Meme Generator</title>
+  <meta name="description" content="COM COIN — Phantom-gated daily pixel meme generator. Generate your daily pull and post it to Twitter." />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 900px; margin: 24px auto; padding: 0 16px; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; background: #111; color: #fff; cursor: pointer; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .card { border: 1px solid #eee; border-radius: 16px; padding: 16px; margin-top: 16px; }
-    .muted { opacity: 0.75; }
-    img { max-width: 100%; border-radius: 12px; border: 1px solid #eee; }
-    a { color: inherit; }
-    code { background: #f6f6f6; padding: 2px 6px; border-radius: 8px; }
+    :root{
+      --bg0:#070A12;
+      --bg1:#0B1022;
+      --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.09);
+      --border: rgba(255,255,255,.12);
+      --text:#EAF0FF;
+      --muted: rgba(234,240,255,.72);
+      --accent:#7C5CFF;
+      --accent2:#00D4FF;
+      --good:#2EE59D;
+      --bad:#FF4D6D;
+      --shadow: 0 14px 50px rgba(0,0,0,.45);
+      --radius: 18px;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--text);
+      background:
+        radial-gradient(900px 500px at 15% 10%, rgba(124,92,255,.28), transparent 60%),
+        radial-gradient(900px 500px at 85% 15%, rgba(0,212,255,.20), transparent 60%),
+        radial-gradient(900px 600px at 50% 90%, rgba(46,229,157,.12), transparent 65%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+    a{ color:inherit; text-decoration:none; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:12px 14px;
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      position: sticky; top: 12px; backdrop-filter: blur(14px);
+      z-index: 50;
+    }
+    .brand{ display:flex; align-items:center; gap:12px; }
+    .logo{
+      width:38px; height:38px; border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 40%),
+        linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 10px 30px rgba(124,92,255,.25);
+      border:1px solid rgba(255,255,255,.18);
+    }
+    .brand h1{ font-size:16px; margin:0; letter-spacing:.06em; }
+    .brand .tag{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
+    .tab{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 13px;
+      transition: .15s ease;
+    }
+    .tab:hover{ background: rgba(255,255,255,.08); color: var(--text); }
+    .tab.primary{
+      background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(0,212,255,.18));
+      color: var(--text);
+      border-color: rgba(255,255,255,.18);
+    }
+    .btn{
+      appearance:none; border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding:10px 12px;
+      border-radius: 999px;
+      cursor:pointer;
+      font-weight: 650;
+      letter-spacing:.02em;
+      transition: .15s ease;
+      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+    }
+    .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.09); }
+    .btn:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
+    .btn.accent{
+      border-color: rgba(124,92,255,.45);
+      background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(0,212,255,.22));
+    }
+    .hero{
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap:16px;
+      margin-top:18px;
+    }
+    @media (max-width: 880px){
+      .hero{ grid-template-columns: 1fr; }
+    }
+    .panel{
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    .hero h2{ margin:0 0 8px; font-size: 34px; letter-spacing:.02em; }
+    .hero p{ margin:0; color:var(--muted); line-height:1.5; }
+    .pillrow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .pill{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.05);
+      padding:8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .pill b{ color: var(--text); font-weight:700; }
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+    @media (max-width: 880px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+    .stat{
+      border:1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255,255,255,.05);
+      padding: 12px 12px;
+    }
+    .stat .k{ font-size: 12px; color: var(--muted); }
+    .stat .v{ font-size: 16px; margin-top: 6px; font-weight: 750; }
+    .sectionTitle{
+      display:flex; align-items:flex-end; justify-content:space-between; gap:12px;
+      margin-top: 18px;
+      margin-bottom: 10px;
+    }
+    .sectionTitle h3{ margin:0; font-size: 18px; }
+    .sectionTitle .hint{ color: var(--muted); font-size: 13px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .msg{ color: var(--muted); margin-top: 10px; min-height: 22px; }
+    .msg.ok{ color: rgba(46,229,157,.9); }
+    .msg.bad{ color: rgba(255,77,109,.95); }
+    .divider{ height:1px; background: var(--border); margin: 16px 0; }
+    .out{
+      display:none;
+      margin-top: 12px;
+      border:1px solid var(--border);
+      border-radius: 16px;
+      background: rgba(255,255,255,.05);
+      padding: 12px;
+    }
+    .out img{
+      width:100%;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.15);
+    }
+    .copybox{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+      margin-top: 10px;
+    }
+    .footer{
+      margin-top: 26px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    .tiny{ font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
-  <h1>Com Coin</h1>
-  <p class="muted">Connect Phantom → if you hold Com Coin → generate <b>one</b> pixel meme per day.</p>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>COM COIN</h1>
+          <div class="tag">Daily pixel meme pull • Phantom gated</div>
+        </div>
+      </div>
 
-  <div class="row">
-    <button id="btnConnect">Connect Phantom</button>
-    <button id="btnDisconnect" disabled>Disconnect</button>
-    <a href="/rank">Ranks</a>
-  </div>
+      <div class="tabs" role="navigation" aria-label="Primary">
+        <a class="tab primary" href="/">Generator</a>
+        <a class="tab" href="/rank">Ranks</a>
+        <a class="tab" href="#how">How it works</a>
+      </div>
 
-  <div class="card">
-    <div><b>Wallet:</b> <span id="wallet">Not connected</span></div>
-    <div><b>Com Coin balance:</b> <span id="balance">—</span></div>
-    <div><b>Your rank:</b> <span id="rank">—</span></div>
-    <div class="muted" style="margin-top:8px;">Daily limit: <code>1 generation / wallet / day</code></div>
-
-    <div class="row" style="margin-top:14px;">
-      <button id="btnGenerate" disabled>Generate image now</button>
-      <button id="btnCopyTweet" disabled>Copy tweet</button>
-      <button id="btnDownload" disabled>Download PNG</button>
+      <div class="row">
+        <button class="btn" id="btnConnect">Connect Phantom</button>
+        <button class="btn" id="btnDisconnect" disabled>Disconnect</button>
+      </div>
     </div>
 
-    <div id="msg" class="muted" style="margin-top:10px;"></div>
-  </div>
+    <div class="hero">
+      <div class="panel">
+        <h2>Pull your daily pixel meme.</h2>
+        <p>
+          Connect Phantom. If you hold <b>COM COIN</b>, you unlock one meme generation per day.
+          The type is random: <span class="mono">animal / tech billionaire / celebrity / politician</span>.
+        </p>
 
-  <div class="card" id="outCard" style="display:none;">
-    <h3 style="margin-top:0;">Your daily pull</h3>
-    <img id="outImg" alt="Com Coin Meme" />
-    <p id="shillText" class="muted"></p>
-  </div>
+        <div class="pillrow">
+          <div class="pill"><b>Token-gated</b> (SPL mint)</div>
+          <div class="pill"><b>1/day</b> per wallet</div>
+          <div class="pill"><b>Twitter-native</b> (you post it)</div>
+        </div>
 
-  <script type="module" src="/main.js"></script>
+        <div class="grid">
+          <div class="stat">
+            <div class="k">Wallet</div>
+            <div class="v mono" id="wallet">Not connected</div>
+          </div>
+          <div class="stat">
+            <div class="k">COM COIN balance</div>
+            <div class="v" id="balance">—</div>
+          </div>
+          <div class="stat">
+            <div class="k">Your rank</div>
+            <div class="v" id="rank">—</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="sectionTitle">
+          <h3>Generator</h3>
+          <div class="hint">Eligible holders can generate once per day.</div>
+        </div>
+
+        <div class="row">
+          <button class="btn accent" id="btnGenerate" disabled>Generate image now</button>
+          <button class="btn" id="btnCopyTweet" disabled>Copy tweet</button>
+          <button class="btn" id="btnDownload" disabled>Download PNG</button>
+        </div>
+
+        <div class="msg" id="msg"></div>
+
+        <div class="out" id="outCard">
+          <img id="outImg" alt="COM COIN meme output" />
+          <div class="copybox">
+            <div class="tiny" id="shillText">
+              Post it with <span class="mono">#ComCoin</span>. Start shilling 🫡
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="how">
+        <div class="sectionTitle" style="margin-top:0;">
+          <h3>How it works</h3>
+          <div class="hint">Simple on purpose.</div>
+        </div>
+        <ol class="tiny" style="line-height:1.7; margin:0; padding-left:18px;">
+          <li>Connect Phantom.</li>
+          <li>We check if you hold COM COIN.</li>
+          <li>You get <b>one</b> generation per day.</li>
+          <li>Download it, then post it on Twitter with <span class="mono">#ComCoin</span>.</li>
+        </ol>
+
+        <div class="divider"></div>
+
+        <div class="sectionTitle" style="margin-top:0;">
+          <h3>Shill script</h3>
+          <div class="hint">Copy/paste fuel</div>
+        </div>
+        <p class="tiny" style="margin:0 0 10px;">
+          Use the “Copy tweet” button or freestyle:
+        </p>
+        <div class="stat">
+          <div class="k">Default tweet</div>
+          <div class="v tiny mono" id="tweetPreview">My COM COIN daily pull is in. #ComCoin start shilling 🫡</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      COM COIN — built for memes. No approvals. No spending permissions. We only verify wallet ownership and token holding.
+    </div>
+
+    <script type="module" src="/main.js"></script>
+  </div>
 </body>
 </html>

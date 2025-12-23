@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>COM COIN — Start Shilling Today</title>
 
-  <!-- Pixel font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -15,7 +14,7 @@
       --bg0:#04160B;
       --bg1:#062011;
 
-      --panel: rgba(0,0,0,.38);
+      --panel: rgba(0,0,0,.40);
       --border: rgba(180,255,210,.30);
       --border2: rgba(180,255,210,.18);
 
@@ -27,12 +26,14 @@
       --bad:#FF4D6D;
 
       --pix: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      /* background motion */
+      --bgShiftY: 0px;
     }
 
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
 
-    /* Make page scroll naturally */
     body{
       margin:0;
       color:var(--text);
@@ -40,16 +41,35 @@
       image-rendering: pixelated;
       overflow-x:hidden;
       overflow-y:auto;
-      background:
-        linear-gradient(180deg, var(--bg0), var(--bg1));
+      background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Big scrolling background layer */
+    /* Make the page scrollable (for background motion) */
+    .scrollSpace{
+      height: 220vh; /* you can scroll a lot */
+      pointer-events:none;
+      opacity:0;
+    }
+
+    /* ---- Fixed UI: stays still ---- */
+    .ui{
+      position: fixed;
+      inset: 0;
+      overflow-y: auto; /* UI can still be used normally */
+      overflow-x: hidden;
+      z-index: 5;
+      padding-bottom: 40px;
+    }
+
+    .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
+
+    /* ---- Background layers behind UI ---- */
     .bg{
       position: fixed;
       inset: 0;
-      z-index: -2;
+      z-index: 0;
       pointer-events:none;
+
       background:
         linear-gradient(90deg, rgba(0,0,0,.14) 1px, transparent 1px),
         linear-gradient(rgba(0,0,0,.14) 1px, transparent 1px),
@@ -59,47 +79,34 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    /* Scrolling $ pattern that feels endless */
+    /* Big scattered pixel $ layer */
     .bgDollars{
       position: fixed;
-      inset: -200vh 0 -200vh 0; /* huge height so it still covers when you scroll */
-      z-index: -1;
+      inset: -120vh -20vw -120vh -20vw; /* huge coverage */
+      z-index: 1;
       pointer-events:none;
-      opacity: .22;
-      filter: drop-shadow(0 6px 0 rgba(0,0,0,.25));
-      background-image:
-        repeating-linear-gradient(
-          180deg,
-          rgba(46,229,157,.0) 0px,
-          rgba(46,229,157,.0) 60px,
-          rgba(46,229,157,.10) 60px,
-          rgba(46,229,157,.10) 62px
-        );
+      transform: translateY(var(--bgShiftY));
+      opacity: .30;
+      filter: drop-shadow(0 8px 0 rgba(0,0,0,.28));
     }
 
-    /* Pixel $ signs using CSS (no images) */
-    .bgDollars::before{
-      content: "$  $   $    $  $   $    $   $  $   $    $  $   $    $   $  $   $";
+    /* Create scattered $ signs via multiple text blocks */
+    .dollarField{
       position:absolute;
-      inset: 0;
+      inset:0;
       font-family: var(--pix);
-      font-size: 26px;
-      letter-spacing: 26px;
-      line-height: 80px;
-      white-space: pre-wrap;
-      color: rgba(46,229,157,.55);
+      color: rgba(46,229,157,.75);
       text-shadow:
-        0 6px 0 rgba(0,0,0,.28),
-        0 0 22px rgba(46,229,157,.10);
-      transform: translateY(var(--dollarY, 0px)) rotate(-2deg);
+        0 8px 0 rgba(0,0,0,.26),
+        0 0 28px rgba(46,229,157,.12);
     }
-
-    /* Make the dollar field “move” a bit as you scroll */
-    body{
-      --dollarY: 0px;
+    .dollar{
+      position:absolute;
+      font-size: 54px;     /* BIG */
+      letter-spacing: .05em;
+      transform: rotate(var(--r));
+      opacity: var(--o);
     }
-
-    .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 90px; }
 
     /* Pixel UI helpers */
     .px-border{
@@ -188,7 +195,6 @@
       text-align:center;
     }
 
-    /* BIG gradient bouncing title (CENTERED) */
     .bigTitle{
       margin: 10px auto 14px;
       width: fit-content;
@@ -223,7 +229,6 @@
       font-size: 11px;
       letter-spacing:.06em;
     }
-    .sub b{ color: var(--text); }
 
     .stats{
       display:grid;
@@ -278,7 +283,6 @@
     .msg.ok{ color: rgba(46,229,157,.98); }
     .msg.bad{ color: rgba(255,77,109,.98); }
 
-    /* Output area where image shows */
     .outWrap{
       display:none;
       max-width: 980px;
@@ -318,13 +322,13 @@
       color: var(--text);
     }
 
-    /* HOW IT WORKS — forced fit */
+    /* How it works: custom numbered list that ALWAYS fits */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
       padding: 14px 12px;
       text-align:left;
-      overflow:hidden;              /* ✅ prevents any overflow outside border */
+      overflow:hidden;
     }
     .how h3{
       margin: 0 0 10px;
@@ -333,24 +337,40 @@
       text-transform: uppercase;
       color: var(--hot);
     }
-    .how ol{
+    .steps{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
       margin:0;
-      padding-left: 18px;
-      color: var(--muted);
-      line-height: 1.85;            /* ✅ slightly tighter to fit */
-      font-size: 10px;
-      letter-spacing:.06em;
-
-      word-break: break-word;
-      overflow-wrap: anywhere;
+      padding:0;
+      list-style:none;
     }
-    .how li{
-      margin-bottom: 6px;           /* ✅ reduces height pressure */
+    .step{
+      display:grid;
+      grid-template-columns: 22px 1fr; /* number + text */
+      gap:10px;
+      align-items:start;
+      min-width:0;
+    }
+    .stepNum{
+      width:22px;
+      text-align:right;
+      font-size: 10px;
+      color: var(--hot);
+      line-height: 1.6;
+    }
+    .stepTxt{
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.75;
+      letter-spacing:.06em;
+      word-break: break-word;
+      overflow-wrap:anywhere;
+      min-width:0;
     }
 
     .hidden{ display:none !important; }
 
-    /* Rank “scoreboard” — only current rank */
     .scoreCard{
       max-width: 980px;
       margin: 0 auto;
@@ -378,113 +398,139 @@
 </head>
 
 <body>
+  <!-- background -->
   <div class="bg"></div>
-  <div class="bgDollars" id="bgDollars"></div>
 
-  <div class="wrap">
+  <div class="bgDollars">
+    <div class="dollarField">
+      <!-- scattered big $ signs -->
+      <div class="dollar" style="top: 6%; left: 8%;  --r:-6deg; --o:.75;">$</div>
+      <div class="dollar" style="top: 12%; left: 72%; --r:8deg;  --o:.55;">$</div>
+      <div class="dollar" style="top: 20%; left: 44%; --r:-2deg; --o:.65;">$</div>
+      <div class="dollar" style="top: 28%; left: 18%; --r:4deg;  --o:.52;">$</div>
+      <div class="dollar" style="top: 36%; left: 82%; --r:-8deg; --o:.70;">$</div>
+      <div class="dollar" style="top: 44%; left: 58%; --r:2deg;  --o:.50;">$</div>
+      <div class="dollar" style="top: 52%; left: 10%; --r:-4deg; --o:.62;">$</div>
+      <div class="dollar" style="top: 60%; left: 38%; --r:7deg;  --o:.58;">$</div>
+      <div class="dollar" style="top: 68%; left: 76%; --r:-3deg; --o:.68;">$</div>
+      <div class="dollar" style="top: 76%; left: 26%; --r:5deg;  --o:.55;">$</div>
+      <div class="dollar" style="top: 84%; left: 62%; --r:-7deg; --o:.66;">$</div>
+      <div class="dollar" style="top: 92%; left: 88%; --r:3deg;  --o:.50;">$</div>
 
-    <!-- TOP BAR -->
-    <div class="topbar px-border">
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div style="min-width:0">
-          <p class="brandName">COM COIN</p>
-          <!-- ✅ only $COMCOIN -->
-          <div class="brandTag">$COMCOIN</div>
-        </div>
-      </div>
-
-      <div class="tabs">
-        <div class="tab active" id="tabGen">Generator</div>
-        <div class="tab" id="tabRank">Rank</div>
-      </div>
-
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn" id="btnConnect">Connect</button>
-        <button class="btn" id="btnDisconnect" disabled>Disconnect</button>
-      </div>
+      <!-- extra density -->
+      <div class="dollar" style="top: 16%; left: 92%; --r:-10deg; --o:.40; font-size:46px;">$</div>
+      <div class="dollar" style="top: 40%; left: 4%;  --r:10deg;  --o:.40; font-size:46px;">$</div>
+      <div class="dollar" style="top: 72%; left: 50%; --r:-6deg;  --o:.40; font-size:46px;">$</div>
+      <div class="dollar" style="top: 88%; left: 14%; --r:6deg;   --o:.40; font-size:46px;">$</div>
     </div>
-
-    <!-- GENERATOR VIEW -->
-    <div class="stage px-border" id="viewGen">
-      <div class="bigTitle">START SHILLING TODAY</div>
-
-      <p class="sub">
-        Connect Phantom. Hold <b>$COMCOIN</b> → get <b>one</b> pixel meme pull per day.
-        It stamps <b>COM COIN</b> at the bottom. Post it and go raid the timeline.
-      </p>
-
-      <div class="stats">
-        <div class="stat px-border-soft">
-          <div class="k">Wallet</div>
-          <div class="v walletFit" id="wallet">Not connected</div>
-        </div>
-        <div class="stat px-border-soft">
-          <div class="k">$COMCOIN balance</div>
-          <div class="v" id="balance">—</div>
-        </div>
-        <div class="stat px-border-soft">
-          <div class="k">Your rank</div>
-          <div class="v" id="rank">—</div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button class="btn primary" id="btnGenerate" disabled>Generate</button>
-        <button class="btn" id="btnDownload" disabled>Save Image</button>
-        <button class="btn" id="btnCopyTweet" disabled>Copy Tweet</button>
-      </div>
-
-      <div class="msg" id="msg"></div>
-
-      <!-- OUTPUT -->
-      <div class="outWrap px-border-soft" id="outWrap">
-        <img class="outImg" id="outImg" alt="Generated meme" />
-        <div class="outLine">
-          <div id="shillText">START SHILLING TODAY • $COMCOIN</div>
-          <div class="chip" id="typeChip">TYPE: —</div>
-        </div>
-      </div>
-
-      <div class="how px-border-soft" id="howBox">
-        <h3>How it works</h3>
-        <ol>
-          <li>CONNECT PHANTOM.</li>
-          <li>HOLD $COMCOIN → 1 GENERATION PER DAY.</li>
-          <li>SAVE IT + POST IT. START SHILLING 🫡</li>
-        </ol>
-      </div>
-    </div>
-
-    <!-- RANK VIEW -->
-    <div class="stage px-border hidden" id="viewRank">
-      <div class="scoreCard px-border-soft">
-        <div class="rankBig" id="rankBig">—</div>
-        <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
-      </div>
-    </div>
-
-    <script type="module" src="/main.js"></script>
-
-    <script>
-      // Make the background dollars drift based on scroll position (simple, smooth)
-      const bg = document.getElementById("bgDollars");
-      let ticking = false;
-
-      function onScroll() {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(() => {
-          const y = window.scrollY || 0;
-          // subtle parallax movement
-          document.body.style.setProperty("--dollarY", `${-(y * 0.35)}px`);
-          ticking = false;
-        });
-      }
-
-      window.addEventListener("scroll", onScroll, { passive: true });
-      onScroll();
-    </script>
   </div>
+
+  <!-- fixed UI layer (stays still) -->
+  <div class="ui">
+    <div class="wrap">
+
+      <div class="topbar px-border">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div style="min-width:0">
+            <p class="brandName">COM COIN</p>
+            <div class="brandTag">$COMCOIN</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" id="tabGen">Generator</div>
+          <div class="tab" id="tabRank">Rank</div>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn" id="btnConnect">Connect</button>
+          <button class="btn" id="btnDisconnect" disabled>Disconnect</button>
+        </div>
+      </div>
+
+      <div class="stage px-border" id="viewGen">
+        <div class="bigTitle">START SHILLING TODAY</div>
+
+        <p class="sub">
+          Connect Phantom. Hold <b>$COMCOIN</b> → get <b>one</b> pixel meme pull per day.
+          It stamps <b>COM COIN</b> at the bottom. Post it and go raid the timeline.
+        </p>
+
+        <div class="stats">
+          <div class="stat px-border-soft">
+            <div class="k">Wallet</div>
+            <div class="v walletFit" id="wallet">Not connected</div>
+          </div>
+          <div class="stat px-border-soft">
+            <div class="k">$COMCOIN balance</div>
+            <div class="v" id="balance">—</div>
+          </div>
+          <div class="stat px-border-soft">
+            <div class="k">Your rank</div>
+            <div class="v" id="rank">—</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnGenerate" disabled>Generate</button>
+          <button class="btn" id="btnDownload" disabled>Save Image</button>
+          <button class="btn" id="btnCopyTweet" disabled>Copy Tweet</button>
+        </div>
+
+        <div class="msg" id="msg"></div>
+
+        <div class="outWrap px-border-soft" id="outWrap">
+          <img class="outImg" id="outImg" alt="Generated meme" />
+          <div class="outLine">
+            <div id="shillText">START SHILLING TODAY • $COMCOIN</div>
+            <div class="chip" id="typeChip">TYPE: —</div>
+          </div>
+        </div>
+
+        <div class="how px-border-soft" id="howBox">
+          <h3>How it works</h3>
+          <ul class="steps">
+            <li class="step">
+              <div class="stepNum">1.</div>
+              <div class="stepTxt">CONNECT PHANTOM.</div>
+            </li>
+            <li class="step">
+              <div class="stepNum">2.</div>
+              <div class="stepTxt">HOLD $COMCOIN → 1 GENERATION PER DAY.</div>
+            </li>
+            <li class="step">
+              <div class="stepNum">3.</div>
+              <div class="stepTxt">SAVE IT + POST IT. START SHILLING 🫡</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="stage px-border hidden" id="viewRank">
+        <div class="scoreCard px-border-soft">
+          <div class="rankBig" id="rankBig">—</div>
+          <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
+        </div>
+      </div>
+
+      <script type="module" src="/main.js"></script>
+    </div>
+  </div>
+
+  <!-- invisible scroll space: only to drive background motion -->
+  <div class="scrollSpace"></div>
+
+  <script>
+    // Background scroll effect: UI stays fixed, dollars move as you scroll the page
+    const root = document.documentElement;
+    function onScroll() {
+      const y = window.scrollY || 0;
+      // drift the background layer upward as you scroll down
+      root.style.setProperty("--bgShiftY", `${-(y * 0.6)}px`);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  </script>
 </body>
 </html>

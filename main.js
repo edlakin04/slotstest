@@ -76,15 +76,16 @@ function showView(which) {
 tabGen.onclick = () => showView("gen");
 tabRank.onclick = () => showView("rank");
 
-async function refreshBalanceAndRank() {
+async function refreshBalanceAndRank({ quiet = false } = {}) {
   if (!publicKeyBase58) return;
 
-  setMsg("CHECKING $COMCOIN BALANCE…");
+  if (!quiet) setMsg("CHECKING $COMCOIN BALANCE…");
+
   const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    setMsg((data?.error || "BALANCE CHECK FAILED.").toUpperCase(), "bad");
+    if (!quiet) setMsg((data?.error || "BALANCE CHECK FAILED.").toUpperCase(), "bad");
     elBalance.textContent = "—";
     elRank.textContent = "—";
     rankBig.textContent = "—";
@@ -98,7 +99,6 @@ async function refreshBalanceAndRank() {
 
   const r = getRank(amt);
   elRank.textContent = r.name;
-
   rankBig.textContent = r.name;
 
   const n = nextRank(amt);
@@ -108,13 +108,16 @@ async function refreshBalanceAndRank() {
     rankCallout.innerHTML = `YOU ARE <b>${r.name}</b>. NEXT: <b>${n ? n.name : "MAXED"}</b>.`;
   }
 
-  const eligible = amt >= 0; // set to (amt >= 0) for testing
+  const eligible = amt > 0; // set to (amt >= 0) for testing
   btnGenerate.disabled = !eligible;
 
-  setMsg(
-    eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE (1/DAY).",
-    eligible ? "ok" : "muted"
-  );
+  // ✅ IMPORTANT: only set the “eligible” message if not quiet
+  if (!quiet) {
+    setMsg(
+      eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE (1/DAY).",
+      eligible ? "ok" : "muted"
+    );
+  }
 }
 
 async function connectPhantom(opts) {
@@ -157,6 +160,9 @@ btnGenerate.onclick = async () => {
   try {
     if (!publicKeyBase58) throw new Error("CONNECT PHANTOM FIRST.");
 
+    // keep output visible if it already exists; otherwise hide until we have a result
+    if (!lastImageSrc) outWrap.style.display = "none";
+
     btnGenerate.disabled = true;
     btnCopyTweet.disabled = true;
     btnDownload.disabled = true;
@@ -179,17 +185,23 @@ btnGenerate.onclick = async () => {
     });
 
     const data = await res.json().catch(() => ({}));
+
+    // Debug: if it fails you will SEE it now (no overwrite)
     if (!res.ok) {
+      console.error("GENERATE FAILED:", res.status, data);
       throw new Error((data?.error || `GENERATE FAILED (HTTP ${res.status})`).toString());
     }
 
     const b64 = data.image_b64;
-    if (!b64) throw new Error("NO IMAGE DATA RETURNED FROM SERVER.");
+    if (!b64) {
+      console.error("NO image_b64 in response:", data);
+      throw new Error("NO IMAGE DATA RETURNED FROM SERVER.");
+    }
 
     const mime = data.mime || "image/png";
     lastImageSrc = `data:${mime};base64,${b64}`;
 
-    // ✅ THIS IS THE BIT THAT DISPLAYS THE IMAGE
+    // ✅ THIS IS THE DISPLAY: set src + show container
     outImg.src = lastImageSrc;
     outWrap.style.display = "block";
 
@@ -203,7 +215,8 @@ btnGenerate.onclick = async () => {
   } catch (e) {
     setMsg(String(e?.message || e).toUpperCase(), "bad");
   } finally {
-    await refreshBalanceAndRank();
+    // ✅ IMPORTANT: update numbers/buttons without overwriting the “GENERATED/ERROR” message
+    await refreshBalanceAndRank({ quiet: true });
   }
 };
 
@@ -215,18 +228,16 @@ btnCopyTweet.onclick = async () => {
 
 btnDownload.onclick = async () => {
   if (!lastImageSrc) return;
-
   const a = document.createElement("a");
   a.href = lastImageSrc;
   a.download = `comcoin-${Date.now()}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   setMsg("IF MOBILE OPENS IMAGE: SHARE → SAVE.", "ok");
 };
 
-// Auto-reconnect on load (keeps wallet “connected” without page reload)
+// Auto-reconnect on load
 (async function autoReconnect() {
   try {
     const provider = window?.solana;
@@ -237,5 +248,4 @@ btnDownload.onclick = async () => {
   }
 })();
 
-// Default view
 showView("gen");

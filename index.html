@@ -14,7 +14,10 @@
       --bg0:#04160B;
       --bg1:#062011;
 
-      --panel: rgba(0,0,0,.40);
+      /* UI is NOT see-through now */
+      --uiSolid: rgba(0,0,0,.92);
+      --panelSolid: rgba(0,0,0,.92);
+
       --border: rgba(180,255,210,.30);
       --border2: rgba(180,255,210,.18);
 
@@ -22,8 +25,6 @@
       --muted: rgba(233,255,241,.80);
 
       --hot:#C8FF00;
-      --good:#2EE59D;
-      --bad:#FF4D6D;
 
       --pix: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
@@ -44,32 +45,34 @@
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Make the page scrollable (for background motion) */
+    /* Scroll driver (makes it feel endless) */
     .scrollSpace{
-      height: 220vh; /* you can scroll a lot */
+      height: 600vh; /* lots of scroll */
       pointer-events:none;
       opacity:0;
     }
 
-    /* ---- Fixed UI: stays still ---- */
+    /* Fixed UI shell so it stays still */
     .ui{
       position: fixed;
       inset: 0;
-      overflow-y: auto; /* UI can still be used normally */
+      overflow-y: auto;
       overflow-x: hidden;
       z-index: 5;
       padding-bottom: 40px;
+      /* solid overlay so background doesn't show through */
+      background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.06));
+      backdrop-filter: none;
     }
 
     .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
 
-    /* ---- Background layers behind UI ---- */
+    /* Background base */
     .bg{
       position: fixed;
       inset: 0;
       z-index: 0;
       pointer-events:none;
-
       background:
         linear-gradient(90deg, rgba(0,0,0,.14) 1px, transparent 1px),
         linear-gradient(rgba(0,0,0,.14) 1px, transparent 1px),
@@ -79,47 +82,51 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    /* Big scattered pixel $ layer */
+    /* BIG BRIGHT SOLID $ LAYER (continuous scroll via tiling) */
     .bgDollars{
       position: fixed;
-      inset: -120vh -20vw -120vh -20vw; /* huge coverage */
+      inset: 0;
       z-index: 1;
       pointer-events:none;
-      transform: translateY(var(--bgShiftY));
-      opacity: .30;
-      filter: drop-shadow(0 8px 0 rgba(0,0,0,.28));
+      overflow:hidden;
     }
 
-    /* Create scattered $ signs via multiple text blocks */
+    /* Two identical fields create an endless loop */
     .dollarField{
       position:absolute;
-      inset:0;
-      font-family: var(--pix);
-      color: rgba(46,229,157,.75);
-      text-shadow:
-        0 8px 0 rgba(0,0,0,.26),
-        0 0 28px rgba(46,229,157,.12);
+      left:0; right:0;
+      width:100%;
+      height: 220vh; /* taller than viewport */
+      transform: translateY(var(--bgShiftY));
+      will-change: transform;
     }
+    .dollarField.fieldA{ top: -110vh; }
+    .dollarField.fieldB{ top: 110vh; }
+
     .dollar{
       position:absolute;
-      font-size: 54px;     /* BIG */
-      letter-spacing: .05em;
+      font-family: var(--pix);
+      color: #00FF57;              /* solid bright green */
+      text-shadow:
+        0 10px 0 rgba(0,0,0,.38),  /* chunky pixel shadow */
+        0 0 28px rgba(0,255,87,.22);
+      opacity: 1;
       transform: rotate(var(--r));
-      opacity: var(--o);
+      user-select:none;
     }
 
-    /* Pixel UI helpers */
+    /* Pixel UI helpers (NOW SOLID) */
     .px-border{
       border: 4px solid var(--border);
       box-shadow:
-        0 0 0 4px rgba(0,0,0,.35),
-        0 10px 0 rgba(0,0,0,.35);
-      background: linear-gradient(180deg, var(--panel), rgba(0,0,0,.26));
+        0 0 0 4px rgba(0,0,0,.45),
+        0 10px 0 rgba(0,0,0,.45);
+      background: var(--panelSolid);
     }
     .px-border-soft{
       border: 4px solid var(--border2);
-      box-shadow: 0 8px 0 rgba(0,0,0,.30);
-      background: rgba(0,0,0,.22);
+      box-shadow: 0 8px 0 rgba(0,0,0,.40);
+      background: var(--uiSolid);
     }
 
     .topbar{
@@ -132,7 +139,7 @@
       width:44px; height:44px;
       border: 4px solid var(--border);
       background: linear-gradient(135deg, rgba(46,229,157,.95), rgba(200,255,0,.75));
-      box-shadow: 0 8px 0 rgba(0,0,0,.35);
+      box-shadow: 0 8px 0 rgba(0,0,0,.45);
       flex:0 0 auto;
     }
     .brandName{
@@ -157,8 +164,8 @@
     .tab{
       padding: 12px 12px;
       border: 4px solid var(--border);
-      background: rgba(0,0,0,.25);
-      box-shadow: 0 6px 0 rgba(0,0,0,.35);
+      background: rgba(0,0,0,.75);
+      box-shadow: 0 6px 0 rgba(0,0,0,.45);
       cursor:pointer;
       font-size: 10px;
       letter-spacing:.10em;
@@ -166,24 +173,24 @@
       user-select:none;
     }
     .tab.active{
-      background: linear-gradient(135deg, rgba(46,229,157,.25), rgba(200,255,0,.18));
+      background: linear-gradient(135deg, rgba(46,229,157,.28), rgba(200,255,0,.18));
       color: var(--text);
     }
 
     .btn{
       appearance:none;
       border: 4px solid var(--border);
-      background: rgba(0,0,0,.28);
+      background: rgba(0,0,0,.80);
       color: var(--text);
       padding: 12px 12px;
-      box-shadow: 0 6px 0 rgba(0,0,0,.35);
+      box-shadow: 0 6px 0 rgba(0,0,0,.45);
       cursor:pointer;
       font-family: var(--pix);
       font-size: 10px;
       letter-spacing:.10em;
       text-transform: uppercase;
     }
-    .btn:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+    .btn:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.45); }
     .btn:disabled{ opacity:.45; cursor:not-allowed; }
     .btn.primary{
       background: linear-gradient(135deg, rgba(46,229,157,.30), rgba(200,255,0,.20));
@@ -206,7 +213,7 @@
       text-transform: uppercase;
       line-height: 1.2;
 
-      text-shadow: 0 10px 0 rgba(0,0,0,.35);
+      text-shadow: 0 10px 0 rgba(0,0,0,.45);
       animation: bounce 1.25s ease-in-out infinite;
 
       background: linear-gradient(90deg, #C8FF00, #2EE59D, #00FFD1, #C8FF00);
@@ -214,7 +221,7 @@
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      filter: drop-shadow(0 8px 18px rgba(0,0,0,.45));
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,.55));
     }
     @keyframes bounce{
       0%,100%{ transform: translateY(0); }
@@ -294,7 +301,7 @@
       width:100%;
       display:block;
       border: 4px solid var(--border2);
-      box-shadow: 0 10px 0 rgba(0,0,0,.30);
+      box-shadow: 0 10px 0 rgba(0,0,0,.40);
       background: rgba(0,0,0,.35);
     }
     .outLine{
@@ -313,16 +320,16 @@
     }
     .chip{
       border: 4px solid var(--border2);
-      background: rgba(0,0,0,.22);
+      background: rgba(0,0,0,.80);
       padding: 10px 10px;
-      box-shadow: 0 8px 0 rgba(0,0,0,.28);
+      box-shadow: 0 8px 0 rgba(0,0,0,.40);
       font-size: 9px;
       letter-spacing:.12em;
       text-transform: uppercase;
       color: var(--text);
     }
 
-    /* How it works: custom numbered list that ALWAYS fits */
+    /* How it works fits inside */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
@@ -347,13 +354,13 @@
     }
     .step{
       display:grid;
-      grid-template-columns: 22px 1fr; /* number + text */
+      grid-template-columns: 28px 1fr; /* more space -> "move right" */
       gap:10px;
       align-items:start;
       min-width:0;
     }
     .stepNum{
-      width:22px;
+      width:28px;
       text-align:right;
       font-size: 10px;
       color: var(--hot);
@@ -384,7 +391,7 @@
       text-transform: uppercase;
       margin: 2px 0 14px;
       color: var(--hot);
-      text-shadow: 0 10px 0 rgba(0,0,0,.35);
+      text-shadow: 0 10px 0 rgba(0,0,0,.45);
     }
     .rankCallout{
       font-size: 10px;
@@ -398,34 +405,54 @@
 </head>
 
 <body>
-  <!-- background -->
   <div class="bg"></div>
 
-  <div class="bgDollars">
-    <div class="dollarField">
-      <!-- scattered big $ signs -->
-      <div class="dollar" style="top: 6%; left: 8%;  --r:-6deg; --o:.75;">$</div>
-      <div class="dollar" style="top: 12%; left: 72%; --r:8deg;  --o:.55;">$</div>
-      <div class="dollar" style="top: 20%; left: 44%; --r:-2deg; --o:.65;">$</div>
-      <div class="dollar" style="top: 28%; left: 18%; --r:4deg;  --o:.52;">$</div>
-      <div class="dollar" style="top: 36%; left: 82%; --r:-8deg; --o:.70;">$</div>
-      <div class="dollar" style="top: 44%; left: 58%; --r:2deg;  --o:.50;">$</div>
-      <div class="dollar" style="top: 52%; left: 10%; --r:-4deg; --o:.62;">$</div>
-      <div class="dollar" style="top: 60%; left: 38%; --r:7deg;  --o:.58;">$</div>
-      <div class="dollar" style="top: 68%; left: 76%; --r:-3deg; --o:.68;">$</div>
-      <div class="dollar" style="top: 76%; left: 26%; --r:5deg;  --o:.55;">$</div>
-      <div class="dollar" style="top: 84%; left: 62%; --r:-7deg; --o:.66;">$</div>
-      <div class="dollar" style="top: 92%; left: 88%; --r:3deg;  --o:.50;">$</div>
+  <!-- Continuous dollar scroll layer (two identical fields) -->
+  <div class="bgDollars" aria-hidden="true">
+    <div class="dollarField fieldA" id="fieldA">
+      <!-- Bigger & more $ signs -->
+      <div class="dollar" style="top:6%; left:10%;  --r:-6deg; font-size:90px;">$</div>
+      <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
+      <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
+      <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
+      <div class="dollar" style="top:32%; left:84%; --r:-8deg; font-size:100px;">$</div>
+      <div class="dollar" style="top:40%; left:56%; --r:2deg;  font-size:130px;">$</div>
+      <div class="dollar" style="top:48%; left:8%;  --r:-4deg; font-size:105px;">$</div>
+      <div class="dollar" style="top:54%; left:36%; --r:7deg;  font-size:115px;">$</div>
+      <div class="dollar" style="top:62%; left:78%; --r:-3deg; font-size:95px;">$</div>
+      <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
+      <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
+      <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
 
-      <!-- extra density -->
-      <div class="dollar" style="top: 16%; left: 92%; --r:-10deg; --o:.40; font-size:46px;">$</div>
-      <div class="dollar" style="top: 40%; left: 4%;  --r:10deg;  --o:.40; font-size:46px;">$</div>
-      <div class="dollar" style="top: 72%; left: 50%; --r:-6deg;  --o:.40; font-size:46px;">$</div>
-      <div class="dollar" style="top: 88%; left: 14%; --r:6deg;   --o:.40; font-size:46px;">$</div>
+      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
+      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
+      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
+      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:78px;">$</div>
+    </div>
+
+    <div class="dollarField fieldB" id="fieldB">
+      <!-- exact clone for seamless loop -->
+      <div class="dollar" style="top:6%; left:10%;  --r:-6deg; font-size:90px;">$</div>
+      <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
+      <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
+      <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
+      <div class="dollar" style="top:32%; left:84%; --r:-8deg; font-size:100px;">$</div>
+      <div class="dollar" style="top:40%; left:56%; --r:2deg;  font-size:130px;">$</div>
+      <div class="dollar" style="top:48%; left:8%;  --r:-4deg; font-size:105px;">$</div>
+      <div class="dollar" style="top:54%; left:36%; --r:7deg;  font-size:115px;">$</div>
+      <div class="dollar" style="top:62%; left:78%; --r:-3deg; font-size:95px;">$</div>
+      <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
+      <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
+      <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
+
+      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
+      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
+      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
+      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:78px;">$</div>
     </div>
   </div>
 
-  <!-- fixed UI layer (stays still) -->
+  <!-- Fixed UI -->
   <div class="ui">
     <div class="wrap">
 
@@ -518,16 +545,26 @@
     </div>
   </div>
 
-  <!-- invisible scroll space: only to drive background motion -->
+  <!-- Invisible page scroll driver -->
   <div class="scrollSpace"></div>
 
   <script>
-    // Background scroll effect: UI stays fixed, dollars move as you scroll the page
+    // Continuous background motion:
+    // We mod the scroll position by the field height so it never "stops".
     const root = document.documentElement;
+    const FIELD_HEIGHT_VH = 220; // must match .dollarField height
     function onScroll() {
       const y = window.scrollY || 0;
-      // drift the background layer upward as you scroll down
-      root.style.setProperty("--bgShiftY", `${-(y * 0.6)}px`);
+      // Convert px scroll to a looping vh-ish shift (simple loop effect)
+      // Use a big divisor so it moves slower than scroll (parallax).
+      const shift = -(y * 0.8);
+
+      // Loop it so it never ends:
+      // We'll wrap shift into a range [-window.innerHeight*2, 0] roughly.
+      const loopPx = (window.innerHeight * (FIELD_HEIGHT_VH / 100));
+      const wrapped = ((shift % loopPx) + loopPx) % loopPx;
+      // translate upward by wrapped amount
+      root.style.setProperty("--bgShiftY", `${-wrapped}px`);
     }
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();

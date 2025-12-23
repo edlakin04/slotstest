@@ -49,12 +49,14 @@
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
+    /* Scroll driver (infinite loop logic keeps it endless) */
     .scrollSpace{
       height: 500vh;
       pointer-events:none;
       opacity:0;
     }
 
+    /* Fixed UI */
     .ui{
       position: fixed;
       inset: 0;
@@ -66,6 +68,7 @@
 
     .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
 
+    /* Background base */
     .bg{
       position: fixed;
       inset: 0;
@@ -80,6 +83,7 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
+    /* Dollar layer */
     .bgDollars{
       position: fixed;
       inset: 0;
@@ -111,6 +115,7 @@
       user-select:none;
     }
 
+    /* Pixel UI helpers (SOLID) */
     .px-border{
       border: 4px solid var(--border);
       box-shadow:
@@ -313,8 +318,7 @@
       overflow-wrap: anywhere;
     }
 
-    /* Removed type chip styling (no longer used) */
-
+    /* How it works */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
@@ -363,6 +367,7 @@
 
     .hidden{ display:none !important; }
 
+    /* Rank */
     .scoreCard{
       max-width: 980px;
       margin: 0 auto;
@@ -386,6 +391,143 @@
       word-break: break-word;
       overflow-wrap: anywhere;
     }
+
+    /* ===== COM CARDS BOARD ===== */
+    .boardHeader{
+      max-width: 980px;
+      margin: 0 auto 12px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      text-align:left;
+    }
+
+    .select{
+      border: 4px solid var(--border);
+      background: rgba(0,0,0,.80);
+      color: var(--text);
+      padding: 12px 12px;
+      box-shadow: 0 6px 0 rgba(0,0,0,.45);
+      font-family: var(--pix);
+      font-size: 10px;
+      letter-spacing:.10em;
+      text-transform: uppercase;
+      outline: none;
+      cursor:pointer;
+    }
+
+    .input{
+      border: 4px solid var(--border);
+      background: rgba(0,0,0,.80);
+      color: var(--text);
+      padding: 12px 12px;
+      box-shadow: 0 6px 0 rgba(0,0,0,.45);
+      font-family: var(--pix);
+      font-size: 10px;
+      letter-spacing:.08em;
+      outline:none;
+      width: 360px;
+      max-width: 100%;
+    }
+
+    .grid{
+      max-width: 980px;
+      margin: 0 auto;
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      text-align:left;
+    }
+
+    .card{
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-width:0;
+    }
+    .cardImg{
+      width:100%;
+      display:block;
+      border: 4px solid var(--border2);
+      box-shadow: 0 10px 0 rgba(0,0,0,.35);
+      background: rgba(0,0,0,.35);
+    }
+    .cardName{
+      font-size: 10px;
+      letter-spacing:.10em;
+      text-transform: uppercase;
+      line-height: 1.8;
+      color: var(--text);
+      word-break: break-word;
+      overflow-wrap:anywhere;
+    }
+    .cardMeta{
+      font-size: 9px;
+      letter-spacing:.08em;
+      line-height: 1.9;
+      color: var(--muted);
+      word-break: break-word;
+      overflow-wrap:anywhere;
+    }
+    .linkLike{
+      color: var(--hot);
+      cursor:pointer;
+      text-decoration:none;
+    }
+    .voteRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top: 2px;
+    }
+    .voteBtns{
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    .pill{
+      border: 4px solid var(--border2);
+      background: rgba(0,0,0,.75);
+      padding: 10px 10px;
+      box-shadow: 0 8px 0 rgba(0,0,0,.40);
+      font-size: 9px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .sectionTitle{
+      max-width: 980px;
+      margin: 0 auto 10px;
+      text-align:left;
+      font-size: 10px;
+      letter-spacing:.14em;
+      text-transform: uppercase;
+      color: var(--hot);
+    }
+
+    .miniGrid{
+      max-width: 980px;
+      margin: 12px auto 0;
+      display:grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      text-align:left;
+    }
+    .miniThumb{
+      width:100%;
+      display:block;
+      border: 4px solid var(--border2);
+      box-shadow: 0 8px 0 rgba(0,0,0,.30);
+      background: rgba(0,0,0,.35);
+      cursor:pointer;
+    }
+
   </style>
 </head>
 
@@ -453,6 +595,7 @@
         <div class="tabs">
           <div class="tab active" id="tabGen">Generator</div>
           <div class="tab" id="tabRank">Rank</div>
+          <div class="tab" id="tabCards">Com Cards</div>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -461,6 +604,7 @@
         </div>
       </div>
 
+      <!-- GENERATOR -->
       <div class="stage px-border" id="viewGen">
         <div class="bigTitle">START SHILLING TODAY</div>
 
@@ -496,7 +640,7 @@
           <img class="outImg" id="outImg" alt="Generated meme" />
           <div class="outLine">
             <div id="shillText">START SHILLING TODAY • $COMCOIN</div>
-            <!-- ✅ removed the "TYPE: ..." chip entirely -->
+            <div id="cardMetaMini" class="pill" style="display:none;"></div>
           </div>
         </div>
 
@@ -510,10 +654,61 @@
         </div>
       </div>
 
+      <!-- RANK -->
       <div class="stage px-border hidden" id="viewRank">
         <div class="scoreCard px-border-soft">
           <div class="rankBig" id="rankBig">—</div>
           <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
+        </div>
+
+        <div class="sectionTitle" style="margin-top:14px;">Your Com Cards</div>
+        <div class="px-border-soft" style="max-width:980px; margin:0 auto; padding:12px;">
+          <div class="msg" id="rankCardsMsg" style="margin:0 0 8px;">CONNECT TO LOAD YOUR COM CARDS.</div>
+          <div class="miniGrid" id="rankMiniGrid"></div>
+        </div>
+      </div>
+
+      <!-- COM CARDS BOARD -->
+      <div class="stage px-border hidden" id="viewCards">
+        <div class="bigTitle" style="font-size:26px;">COM CARDS</div>
+        <p class="sub">TRENDING / TOP / NEWEST. MAX 100. OLDER ONES: SEARCH BY ID.</p>
+
+        <div class="boardHeader">
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <select class="select" id="cardsSort">
+              <option value="trending">Trending</option>
+              <option value="top">Top</option>
+              <option value="newest">Newest</option>
+            </select>
+            <button class="btn" id="btnRefreshCards">Refresh</button>
+          </div>
+
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+            <input class="input" id="searchCardId" placeholder="SEARCH BY CARD ID (e.g. CC_...)" />
+            <button class="btn" id="btnSearchCard">Search</button>
+          </div>
+        </div>
+
+        <div class="msg" id="cardsMsg"></div>
+        <div class="grid" id="cardsGrid"></div>
+      </div>
+
+      <!-- WALLET PROFILE (from clicking wallet id) -->
+      <div class="stage px-border hidden" id="viewWallet">
+        <div class="bigTitle" style="font-size:24px;">WALLET CARDS</div>
+        <p class="sub" id="walletPageSub">—</p>
+
+        <div class="px-border-soft" style="max-width:980px; margin:0 auto; padding:12px;">
+          <div class="rankBig" id="walletRankBig" style="margin-top:6px;">—</div>
+          <div class="rankCallout" id="walletRankCallout">—</div>
+        </div>
+
+        <div class="sectionTitle" style="margin-top:14px;">Com Cards</div>
+        <div class="msg" id="walletCardsMsg"></div>
+        <div class="grid" id="walletCardsGrid"></div>
+
+        <div style="max-width:980px; margin:14px auto 0; text-align:center;">
+          <button class="btn" id="btnBackToCards">Back to Com Cards</button>
         </div>
       </div>
 
@@ -524,16 +719,17 @@
   <div class="scrollSpace"></div>
 
   <script>
+    // Infinite scroll loop + background direction
     const root = document.documentElement;
 
     function fieldLoopPx() {
       return window.innerHeight * 2.2; // 220vh
     }
 
-    // Keep background direction as you currently have it (swapped earlier):
+    // keep current direction (negative = reversed)
     function setBgFromScroll(y) {
       const loopPx = fieldLoopPx();
-      const raw = -y * 0.6; // background direction
+      const raw = -y * 0.6;
       const wrapped = ((raw % loopPx) + loopPx) % loopPx;
       root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }

@@ -63,7 +63,7 @@ async function refreshBalance() {
   elBalance.textContent = amt.toLocaleString("en-GB");
   elRank.textContent = getRank(amt).name;
 
-  const eligible = amt > 0;
+  const eligible = amt >= 0;
   btnGenerate.disabled = !eligible;
 
   setMsg(

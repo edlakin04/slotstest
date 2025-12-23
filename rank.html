@@ -3,36 +3,183 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Com Coin — Ranks</title>
+  <title>COM COIN — Ranks</title>
+  <meta name="description" content="COM COIN ranks and holder levels." />
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; max-width: 900px; margin: 24px auto; padding: 0 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; }
-    .muted { opacity: 0.75; }
-    a { color: inherit; }
-    code { background: #f6f6f6; padding: 2px 6px; border-radius: 8px; }
+    :root{
+      --bg0:#070A12;
+      --bg1:#0B1022;
+      --card: rgba(255,255,255,.06);
+      --border: rgba(255,255,255,.12);
+      --text:#EAF0FF;
+      --muted: rgba(234,240,255,.72);
+      --accent:#7C5CFF;
+      --accent2:#00D4FF;
+      --shadow: 0 14px 50px rgba(0,0,0,.45);
+      --radius: 18px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(900px 500px at 15% 10%, rgba(124,92,255,.28), transparent 60%),
+        radial-gradient(900px 500px at 85% 15%, rgba(0,212,255,.20), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+    a{ color:inherit; text-decoration:none; }
+    .wrap{ max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:12px 14px;
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+      position: sticky; top: 12px; backdrop-filter: blur(14px);
+      z-index: 50;
+    }
+    .brand{ display:flex; align-items:center; gap:12px; }
+    .logo{
+      width:38px; height:38px; border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 40%),
+        linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 10px 30px rgba(124,92,255,.25);
+      border:1px solid rgba(255,255,255,.18);
+    }
+    .brand h1{ font-size:16px; margin:0; letter-spacing:.06em; }
+    .brand .tag{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
+    .tab{
+      padding:10px 12px;
+      border:1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 13px;
+      transition: .15s ease;
+    }
+    .tab:hover{ background: rgba(255,255,255,.08); color: var(--text); }
+    .tab.primary{
+      background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(0,212,255,.18));
+      color: var(--text);
+      border-color: rgba(255,255,255,.18);
+    }
+    .panel{
+      margin-top: 18px;
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+    h2{ margin: 0 0 8px; font-size: 30px; }
+    p{ margin:0; color:var(--muted); line-height:1.6; }
+    .table{
+      margin-top: 14px;
+      border:1px solid var(--border);
+      border-radius: 16px;
+      overflow:hidden;
+      background: rgba(255,255,255,.05);
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 10px;
+      padding: 12px 14px;
+      border-top: 1px solid rgba(255,255,255,.10);
+      align-items:center;
+    }
+    .row:first-child{ border-top:0; }
+    .head{
+      background: rgba(255,255,255,.06);
+      font-weight: 750;
+      color: var(--text);
+    }
+    .badge{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      width: fit-content;
+    }
+    .dot{
+      width:10px; height:10px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      box-shadow: 0 8px 22px rgba(124,92,255,.35);
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .tip{
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.05);
+      color: var(--muted);
+      font-size: 13px;
+    }
   </style>
 </head>
 <body>
-  <a href="/">← Back</a>
-  <h1>Ranks</h1>
-  <p class="muted">Ranks are based on how much <b>Com Coin</b> you hold (SPL token amount).</p>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1>COM COIN</h1>
+          <div class="tag">Ranks • holder levels</div>
+        </div>
+      </div>
 
-  <table>
-    <thead>
-      <tr><th>Rank</th><th>Minimum Com Coin</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>Dust</td><td>0</td></tr>
-      <tr><td>Hodler</td><td>1</td></tr>
-      <tr><td>Shiller</td><td>1,000</td></tr>
-      <tr><td>Chad</td><td>10,000</td></tr>
-      <tr><td>Whale</td><td>100,000</td></tr>
-    </tbody>
-  </table>
+      <div class="tabs">
+        <a class="tab" href="/">Generator</a>
+        <a class="tab primary" href="/rank">Ranks</a>
+      </div>
+    </div>
 
-  <p class="muted" style="margin-top:14px;">
-    Tip: The generator page uses a hard gate of <code>&gt; 0</code> tokens (you can raise it later).
-  </p>
+    <div class="panel">
+      <h2>Holder Levels</h2>
+      <p>
+        These are the COM COIN ranks shown on the generator page.
+        They’re based on your <b>token amount</b> (SPL balance).
+      </p>
+
+      <div class="table" role="table" aria-label="COM COIN ranks">
+        <div class="row head" role="row">
+          <div role="columnheader">Rank</div>
+          <div role="columnheader">Minimum COM COIN</div>
+        </div>
+
+        <div class="row" role="row">
+          <div role="cell"><span class="badge"><span class="dot"></span>Dust</span></div>
+          <div role="cell" class="mono">0</div>
+        </div>
+        <div class="row" role="row">
+          <div role="cell"><span class="badge"><span class="dot"></span>Hodler</span></div>
+          <div role="cell" class="mono">1</div>
+        </div>
+        <div class="row" role="row">
+          <div role="cell"><span class="badge"><span class="dot"></span>Shiller</span></div>
+          <div role="cell" class="mono">1,000</div>
+        </div>
+        <div class="row" role="row">
+          <div role="cell"><span class="badge"><span class="dot"></span>Chad</span></div>
+          <div role="cell" class="mono">10,000</div>
+        </div>
+        <div class="row" role="row">
+          <div role="cell"><span class="badge"><span class="dot"></span>Whale</span></div>
+          <div role="cell" class="mono">100,000</div>
+        </div>
+      </div>
+
+      <div class="tip">
+        If you want, you can change these thresholds later (it’s just numbers in <span class="mono">main.js</span>).
+        The <b>gate</b> to generate is currently: <span class="mono">balance &gt; 0</span>.
+      </div>
+    </div>
+  </div>
 </body>
 </html>

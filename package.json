@@ -1,8 +1,10 @@
 {
-  "name": "comcoin",
+  "name": "comcoin-site",
   "private": true,
-  "version": "1.0.0",
+  "type": "module",
   "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "@supabase/supabase-js": "^2.49.1",
     "bs58": "^5.0.0",
     "tweetnacl": "^1.0.3"
   }

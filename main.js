@@ -16,7 +16,7 @@ const elBalance = document.getElementById("balance");
 const elRank = document.getElementById("rank");
 const elMsg = document.getElementById("msg");
 
-const outCard = document.getElementById("outCard");
+const outWrap = document.getElementById("outWrap");
 const outImg = document.getElementById("outImg");
 const shillText = document.getElementById("shillText");
 const typeChip = document.getElementById("typeChip");
@@ -51,7 +51,7 @@ function setMsg(text, kind = "muted") {
 
 function requirePhantom() {
   const provider = window?.solana;
-  if (!provider?.isPhantom) throw new Error("Phantom not found. Install Phantom and refresh.");
+  if (!provider?.isPhantom) throw new Error("PHANTOM NOT FOUND. INSTALL PHANTOM AND REFRESH.");
   return provider;
 }
 
@@ -79,16 +79,16 @@ tabRank.onclick = () => showView("rank");
 async function refreshBalanceAndRank() {
   if (!publicKeyBase58) return;
 
-  setMsg("Checking COM COIN balance…");
+  setMsg("CHECKING $COMCOIN BALANCE…");
   const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    setMsg(data?.error || "Balance check failed.", "bad");
+    setMsg((data?.error || "BALANCE CHECK FAILED.").toUpperCase(), "bad");
     elBalance.textContent = "—";
     elRank.textContent = "—";
-    if (rankBig) rankBig.textContent = "—";
-    if (rankCallout) rankCallout.textContent = "Balance check failed.";
+    rankBig.textContent = "—";
+    rankCallout.textContent = "BALANCE CHECK FAILED.";
     btnGenerate.disabled = true;
     return;
   }
@@ -99,22 +99,20 @@ async function refreshBalanceAndRank() {
   const r = getRank(amt);
   elRank.textContent = r.name;
 
-  if (rankBig) rankBig.textContent = r.name;
+  rankBig.textContent = r.name;
 
   const n = nextRank(amt);
-  if (rankCallout) {
-    if (amt <= 0) {
-      rankCallout.innerHTML = `You own <b>no COM COIN</b>. Buy some to rank up.`;
-    } else {
-      rankCallout.innerHTML = `You are <b>${r.name}</b>. Next: <b>${n ? n.name : "MAXED"}</b>.`;
-    }
+  if (amt <= 0) {
+    rankCallout.innerHTML = `YOU OWN <b>NO $COMCOIN</b>. BUY SOME TO RANK UP.`;
+  } else {
+    rankCallout.innerHTML = `YOU ARE <b>${r.name}</b>. NEXT: <b>${n ? n.name : "MAXED"}</b>.`;
   }
 
   const eligible = amt >= 0; // set to (amt >= 0) for testing
   btnGenerate.disabled = !eligible;
 
   setMsg(
-    eligible ? "Eligible. Hit GENERATE." : "Hold COM COIN to generate (1/day).",
+    eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE (1/DAY).",
     eligible ? "ok" : "muted"
   );
 }
@@ -132,7 +130,7 @@ btnConnect.onclick = async () => {
   try {
     await connectPhantom();
   } catch (e) {
-    setMsg(e?.message || String(e), "bad");
+    setMsg(String(e?.message || e).toUpperCase(), "bad");
   }
 };
 
@@ -140,15 +138,15 @@ btnDisconnect.onclick = async () => {
   try { await requirePhantom().disconnect(); } catch {}
   publicKeyBase58 = null;
 
-  elWallet.textContent = "Not connected";
+  elWallet.textContent = "NOT CONNECTED";
   elBalance.textContent = "—";
   elRank.textContent = "—";
-  if (rankBig) rankBig.textContent = "—";
-  if (rankCallout) rankCallout.textContent = "Connect to see your holder level.";
+  rankBig.textContent = "—";
+  rankCallout.textContent = "CONNECT TO SEE YOUR HOLDER LEVEL.";
 
   setConnectedUI(false);
 
-  outCard.style.display = "none";
+  outWrap.style.display = "none";
   outImg.removeAttribute("src");
   lastImageSrc = null;
 
@@ -157,13 +155,13 @@ btnDisconnect.onclick = async () => {
 
 btnGenerate.onclick = async () => {
   try {
-    if (!publicKeyBase58) throw new Error("Connect Phantom first.");
+    if (!publicKeyBase58) throw new Error("CONNECT PHANTOM FIRST.");
 
     btnGenerate.disabled = true;
     btnCopyTweet.disabled = true;
     btnDownload.disabled = true;
 
-    setMsg("Signing…");
+    setMsg("SIGNING…");
     const provider = requirePhantom();
     const today = new Date().toISOString().slice(0, 10);
     const message = `COM COIN daily meme | ${today} | I own this wallet`;
@@ -172,7 +170,8 @@ btnGenerate.onclick = async () => {
     const signed = await provider.signMessage(encoded, "utf8");
     const signatureB58 = bs58.encode(signed.signature);
 
-    setMsg("Generating image…");
+    setMsg("GENERATING IMAGE…");
+
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -180,50 +179,54 @@ btnGenerate.onclick = async () => {
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || `Generate failed (HTTP ${res.status})`);
+    if (!res.ok) {
+      throw new Error((data?.error || `GENERATE FAILED (HTTP ${res.status})`).toString());
+    }
 
     const b64 = data.image_b64;
-    if (!b64) throw new Error("No image data returned from server.");
+    if (!b64) throw new Error("NO IMAGE DATA RETURNED FROM SERVER.");
 
     const mime = data.mime || "image/png";
     lastImageSrc = `data:${mime};base64,${b64}`;
 
-    // show output area before image loads so user sees it
-    outCard.style.display = "block";
+    // ✅ THIS IS THE BIT THAT DISPLAYS THE IMAGE
     outImg.src = lastImageSrc;
+    outWrap.style.display = "block";
 
-    typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "";
-    shillText.innerHTML = `Post it with <b>#ComCoin</b> • start shilling 🫡`;
+    typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "TYPE: ???";
+    shillText.textContent = "POST IT • START SHILLING 🫡 • $COMCOIN";
 
-    setMsg("Image ready. Save it + post it.", "ok");
+    setMsg("GENERATED. SAVE IT + POST IT.", "ok");
     btnCopyTweet.disabled = false;
     btnDownload.disabled = false;
 
   } catch (e) {
-    setMsg(e?.message || String(e), "bad");
+    setMsg(String(e?.message || e).toUpperCase(), "bad");
   } finally {
     await refreshBalanceAndRank();
   }
 };
 
 btnCopyTweet.onclick = async () => {
-  const text = `My COM COIN daily pull is in. #ComCoin start shilling 🫡`;
+  const text = `MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡`;
   await navigator.clipboard.writeText(text);
-  setMsg("Tweet copied.", "ok");
+  setMsg("TWEET COPIED.", "ok");
 };
 
 btnDownload.onclick = async () => {
   if (!lastImageSrc) return;
+
   const a = document.createElement("a");
   a.href = lastImageSrc;
   a.download = `comcoin-${Date.now()}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setMsg("If mobile opens the image, use Share → Save.", "ok");
+
+  setMsg("IF MOBILE OPENS IMAGE: SHARE → SAVE.", "ok");
 };
 
-// Auto-reconnect on load
+// Auto-reconnect on load (keeps wallet “connected” without page reload)
 (async function autoReconnect() {
   try {
     const provider = window?.solana;

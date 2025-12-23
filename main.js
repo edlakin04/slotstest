@@ -55,10 +55,29 @@ function showView(which) {
 tabGen.onclick = () => showView("gen");
 tabRank.onclick = () => showView("rank");
 
-function requirePhantom() {
+function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
+}
+
+// Opens your current site inside Phantom mobile browser
+function openInPhantom() {
+  const url = window.location.href;
+  const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
+  window.location.href = deepLink;
+}
+
+function requirePhantomOrDeepLink() {
   const p = window?.solana;
-  if (!p?.isPhantom) throw new Error("PHANTOM WALLET NOT FOUND");
-  return p;
+  if (p?.isPhantom) return p;
+
+  // If on mobile Safari/Chrome, Phantom provider usually doesn't exist.
+  if (isMobile()) {
+    setMsg("OPENING IN PHANTOM…", "ok");
+    openInPhantom();
+    throw new Error("Open in Phantom to connect.");
+  }
+
+  throw new Error("PHANTOM WALLET NOT FOUND");
 }
 
 function setConnectedUI(connected) {
@@ -82,7 +101,7 @@ function nextRank(amount) {
 /* ---------------- Wallet ---------------- */
 
 async function connectPhantom(opts) {
-  const provider = requirePhantom();
+  const provider = requirePhantomOrDeepLink();
   const resp = await provider.connect(opts);
   publicKeyBase58 = resp.publicKey.toBase58();
   elWallet.textContent = publicKeyBase58;
@@ -99,7 +118,7 @@ btnConnect.onclick = async () => {
 };
 
 btnDisconnect.onclick = async () => {
-  try { await requirePhantom().disconnect(); } catch {}
+  try { await window?.solana?.disconnect(); } catch {}
   publicKeyBase58 = null;
 
   elWallet.textContent = "Not connected";
@@ -147,7 +166,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
       ? "YOU OWN NO $COMCOIN. BUY SOME TO RANK UP."
       : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
 
-  const eligible = amt >= 0; // set to true or >=0 for testing
+  const eligible = amt >= 0; // set >=0 for testing if you want
   btnGenerate.disabled = !eligible;
 
   if (!quiet) {
@@ -170,7 +189,7 @@ btnGenerate.onclick = async () => {
 
     setMsg("SIGN MESSAGE…");
 
-    const provider = requirePhantom();
+    const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
     const message = `COM COIN daily meme | ${today}`;
 
@@ -194,13 +213,8 @@ btnGenerate.onclick = async () => {
     let data = null;
     try { data = JSON.parse(text); } catch {}
 
-    if (!res.ok) {
-      throw new Error(data?.error || text || `HTTP ${res.status}`);
-    }
-
-    if (!data?.image_b64) {
-      throw new Error("NO IMAGE DATA RETURNED");
-    }
+    if (!res.ok) throw new Error(data?.error || text || `HTTP ${res.status}`);
+    if (!data?.image_b64) throw new Error("NO IMAGE DATA RETURNED");
 
     lastImageSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
 
@@ -224,9 +238,7 @@ btnGenerate.onclick = async () => {
 /* ---------------- Extras ---------------- */
 
 btnCopyTweet.onclick = async () => {
-  await navigator.clipboard.writeText(
-    "MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡"
-  );
+  await navigator.clipboard.writeText("MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡");
   setMsg("TWEET COPIED.", "ok");
 };
 

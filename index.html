@@ -312,16 +312,8 @@
       word-break: break-word;
       overflow-wrap: anywhere;
     }
-    .chip{
-      border: 4px solid var(--border2);
-      background: rgba(0,0,0,.80);
-      padding: 10px 10px;
-      box-shadow: 0 8px 0 rgba(0,0,0,.40);
-      font-size: 9px;
-      letter-spacing:.12em;
-      text-transform: uppercase;
-      color: var(--text);
-    }
+
+    /* Removed type chip styling (no longer used) */
 
     .how{
       max-width: 980px;
@@ -504,7 +496,7 @@
           <img class="outImg" id="outImg" alt="Generated meme" />
           <div class="outLine">
             <div id="shillText">START SHILLING TODAY • $COMCOIN</div>
-            <div class="chip" id="typeChip">TYPE: —</div>
+            <!-- ✅ removed the "TYPE: ..." chip entirely -->
           </div>
         </div>
 
@@ -532,19 +524,16 @@
   <div class="scrollSpace"></div>
 
   <script>
-    // TRUE INFINITE LOOP (keeps scroll position inside a middle band)
     const root = document.documentElement;
 
     function fieldLoopPx() {
       return window.innerHeight * 2.2; // 220vh
     }
 
+    // Keep background direction as you currently have it (swapped earlier):
     function setBgFromScroll(y) {
       const loopPx = fieldLoopPx();
-
-      // ✅ direction swapped here (negative sign)
-      const raw = -y * 0.6;
-
+      const raw = -y * 0.6; // background direction
       const wrapped = ((raw % loopPx) + loopPx) % loopPx;
       root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }
@@ -554,11 +543,8 @@
       const y = window.scrollY || 0;
       const margin = 400;
 
-      if (y < margin) {
-        window.scrollTo(0, y + (maxY - 2*margin));
-      } else if (y > maxY - margin) {
-        window.scrollTo(0, y - (maxY - 2*margin));
-      }
+      if (y < margin) window.scrollTo(0, y + (maxY - 2*margin));
+      else if (y > maxY - margin) window.scrollTo(0, y - (maxY - 2*margin));
 
       setBgFromScroll(window.scrollY || 0);
     }

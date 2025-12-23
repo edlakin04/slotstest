@@ -1,197 +1,251 @@
-// /api/generate.js
-export default async function handler(req, res) {
-  // CORS (helps when testing)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(204).end();
+import bs58 from "https://cdn.skypack.dev/bs58";
 
+const tabGen = document.getElementById("tabGen");
+const tabRank = document.getElementById("tabRank");
+const viewGen = document.getElementById("viewGen");
+const viewRank = document.getElementById("viewRank");
+
+const btnConnect = document.getElementById("btnConnect");
+const btnDisconnect = document.getElementById("btnDisconnect");
+const btnGenerate = document.getElementById("btnGenerate");
+const btnCopyTweet = document.getElementById("btnCopyTweet");
+const btnDownload = document.getElementById("btnDownload");
+
+const elWallet = document.getElementById("wallet");
+const elBalance = document.getElementById("balance");
+const elRank = document.getElementById("rank");
+const elMsg = document.getElementById("msg");
+
+const outWrap = document.getElementById("outWrap");
+const outImg = document.getElementById("outImg");
+const shillText = document.getElementById("shillText");
+const typeChip = document.getElementById("typeChip");
+
+const rankBig = document.getElementById("rankBig");
+const rankCallout = document.getElementById("rankCallout");
+
+let publicKeyBase58 = null;
+let lastImageSrc = null;
+
+const RANKS = [
+  { name: "Dust", min: 0 },
+  { name: "Hodler", min: 1 },
+  { name: "Shiller", min: 1_000 },
+  { name: "Chad", min: 10_000 },
+  { name: "Whale", min: 100_000 },
+];
+
+function getRank(amount) {
+  return [...RANKS].reverse().find(r => amount >= r.min) ?? RANKS[0];
+}
+function nextRank(amount) {
+  return RANKS.find(r => r.min > amount) || null;
+}
+
+function setMsg(text, kind = "muted") {
+  elMsg.classList.remove("ok", "bad");
+  if (kind === "ok") elMsg.classList.add("ok");
+  if (kind === "bad") elMsg.classList.add("bad");
+  elMsg.textContent = text || "";
+}
+
+function requirePhantom() {
+  const provider = window?.solana;
+  if (!provider?.isPhantom) throw new Error("PHANTOM NOT FOUND. INSTALL PHANTOM AND REFRESH.");
+  return provider;
+}
+
+function setConnectedUI(connected) {
+  btnConnect.disabled = connected;
+  btnDisconnect.disabled = !connected;
+  if (!connected) {
+    btnGenerate.disabled = true;
+    btnCopyTweet.disabled = true;
+    btnDownload.disabled = true;
+  }
+}
+
+function showView(which) {
+  const gen = which === "gen";
+  viewGen.classList.toggle("hidden", !gen);
+  viewRank.classList.toggle("hidden", gen);
+  tabGen.classList.toggle("active", gen);
+  tabRank.classList.toggle("active", !gen);
+}
+
+tabGen.onclick = () => showView("gen");
+tabRank.onclick = () => showView("rank");
+
+async function refreshBalanceAndRank({ quiet = false } = {}) {
+  if (!publicKeyBase58) return;
+
+  if (!quiet) setMsg("CHECKING $COMCOIN BALANCE…");
+
+  const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    if (!quiet) setMsg((data?.error || "BALANCE CHECK FAILED.").toUpperCase(), "bad");
+    elBalance.textContent = "—";
+    elRank.textContent = "—";
+    rankBig.textContent = "—";
+    rankCallout.textContent = "BALANCE CHECK FAILED.";
+    btnGenerate.disabled = true;
+    return;
+  }
+
+  const amt = Number(data.uiAmount || 0);
+  elBalance.textContent = amt.toLocaleString("en-GB");
+
+  const r = getRank(amt);
+  elRank.textContent = r.name;
+  rankBig.textContent = r.name;
+
+  const n = nextRank(amt);
+  if (amt <= 0) {
+    rankCallout.innerHTML = `YOU OWN <b>NO $COMCOIN</b>. BUY SOME TO RANK UP.`;
+  } else {
+    rankCallout.innerHTML = `YOU ARE <b>${r.name}</b>. NEXT: <b>${n ? n.name : "MAXED"}</b>.`;
+  }
+
+  const eligible = amt >= 0; // set to (amt >= 0) for testing
+  btnGenerate.disabled = !eligible;
+
+  // ✅ IMPORTANT: only set the “eligible” message if not quiet
+  if (!quiet) {
+    setMsg(
+      eligible ? "ELIGIBLE. HIT GENERATE." : "HOLD $COMCOIN TO GENERATE (1/DAY).",
+      eligible ? "ok" : "muted"
+    );
+  }
+}
+
+async function connectPhantom(opts) {
+  const provider = requirePhantom();
+  const resp = await provider.connect(opts);
+  publicKeyBase58 = resp.publicKey.toBase58();
+  elWallet.textContent = publicKeyBase58;
+  setConnectedUI(true);
+  await refreshBalanceAndRank();
+}
+
+btnConnect.onclick = async () => {
   try {
-    if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+    await connectPhantom();
+  } catch (e) {
+    setMsg(String(e?.message || e).toUpperCase(), "bad");
+  }
+};
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const rpcUrl = process.env.SOLANA_RPC_URL;
-    const mint = process.env.COMCOIN_MINT;
-    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+btnDisconnect.onclick = async () => {
+  try { await requirePhantom().disconnect(); } catch {}
+  publicKeyBase58 = null;
 
-    if (!openaiKey) return json(res, 500, { error: "Missing OPENAI_API_KEY env var" });
-    if (!rpcUrl) return json(res, 500, { error: "Missing SOLANA_RPC_URL env var" });
-    if (!mint) return json(res, 500, { error: "Missing COMCOIN_MINT env var" });
-    if (!upstashUrl || !upstashToken) return json(res, 500, { error: "Missing Upstash env vars" });
+  elWallet.textContent = "NOT CONNECTED";
+  elBalance.textContent = "—";
+  elRank.textContent = "—";
+  rankBig.textContent = "—";
+  rankCallout.textContent = "CONNECT TO SEE YOUR HOLDER LEVEL.";
 
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const { pubkey, message, signature } = body || {};
-    if (!pubkey || !message || !signature) {
-      return json(res, 400, { error: "Missing pubkey/message/signature" });
-    }
+  setConnectedUI(false);
 
-    // 1) Verify Phantom signature (ed25519)
-    const okSig = await verifySolanaSignature({ pubkey, message, signature });
-    if (!okSig) return json(res, 401, { error: "Signature verification failed" });
+  outWrap.style.display = "none";
+  outImg.removeAttribute("src");
+  lastImageSrc = null;
 
-    // 2) Rate limit: 1 per day per wallet (UTC day)
+  setMsg("");
+};
+
+btnGenerate.onclick = async () => {
+  try {
+    if (!publicKeyBase58) throw new Error("CONNECT PHANTOM FIRST.");
+
+    // keep output visible if it already exists; otherwise hide until we have a result
+    if (!lastImageSrc) outWrap.style.display = "none";
+
+    btnGenerate.disabled = true;
+    btnCopyTweet.disabled = true;
+    btnDownload.disabled = true;
+
+    setMsg("SIGNING…");
+    const provider = requirePhantom();
     const today = new Date().toISOString().slice(0, 10);
-    const limiterKey = `gen:${pubkey}:${today}`;
-    const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
-    if (already) {
-      return json(res, 429, { error: "Daily limit reached: 1 generation per day" });
-    }
-    // set the limiter with 26h ttl (safe across TZ edge)
-    await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
+    const message = `COM COIN daily meme | ${today} | I own this wallet`;
 
-    // 3) Token gate (TURN OFF FOR TESTING if you want)
-    // For testing, comment this entire block out
-    const uiAmount = await getUiTokenBalance({ rpcUrl, mint, owner: pubkey });
-    if (!(uiAmount > 0)) {
-      return json(res, 403, { error: "Not eligible: you do not hold $COMCOIN" });
-    }
+    const encoded = new TextEncoder().encode(message);
+    const signed = await provider.signMessage(encoded, "utf8");
+    const signatureB58 = bs58.encode(signed.signature);
 
-    // 4) Pick random type
-    const types = ["animal", "tech billionaire", "celebrity", "politician"];
-    const pick = types[Math.floor(Math.random() * types.length)];
+    setMsg("GENERATING IMAGE…");
 
-    // 5) Build prompt (this is the one you asked about)
-    const prompt = `
-Create a single square image in crisp 16-bit pixel art (retro SNES / Game Boy Color style).
-
-Subject:
-- TYPE: ${pick}
-- Choose a single well-known representative that fits this type and depict them as a stylized pixel-art character or creature.
-- The depiction must be recognizable but NOT photorealistic.
-
-Style rules:
-- Limited color palette (12–20 colors)
-- Sharp pixel edges, subtle dithering
-- High contrast, clean silhouette
-- Simple, uncluttered background
-
-Text rules (VERY IMPORTANT):
-- Overlay pixelated retro video-game text at the very bottom of the image that reads EXACTLY:
-  "COM COIN"
-- Text must be all caps, blocky pixel font, clearly readable.
-- The text should slightly overlap the background but NOT cover the subject’s face.
-- No other text anywhere in the image.
-- No logos, no watermarks.
-
-Overall vibe:
-- Looks like a collectible retro game character card.
-- Consistent layout, arcade-style presentation.
-`.trim();
-
-    // 6) Call OpenAI Images API
-    const oaiResp = await fetch("https://api.openai.com/v1/images/generations", {
+    const res = await fetch("/api/generate", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-image-1",
-        prompt,
-        size: "1024x1024",
-        output_format: "png"
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature: signatureB58 })
     });
 
-    const rawText = await oaiResp.text();
-    let out;
-    try { out = JSON.parse(rawText); } catch { out = null; }
+    const data = await res.json().catch(() => ({}));
 
-    if (!oaiResp.ok) {
-      // return the REAL OpenAI error body so you can see it in the UI
-      return json(res, 502, { error: `OpenAI error: ${rawText.slice(0, 900)}` });
+    // Debug: if it fails you will SEE it now (no overwrite)
+    if (!res.ok) {
+      console.error("GENERATE FAILED:", res.status, data);
+      throw new Error((data?.error || `GENERATE FAILED (HTTP ${res.status})`).toString());
     }
 
-    const b64 = out?.data?.[0]?.b64_json;
+    const b64 = data.image_b64;
     if (!b64) {
-      return json(res, 502, { error: `OpenAI returned no b64_json. Raw: ${rawText.slice(0, 900)}` });
+      console.error("NO image_b64 in response:", data);
+      throw new Error("NO IMAGE DATA RETURNED FROM SERVER.");
     }
 
-    return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
-  } catch (err) {
-    // THIS is what turns a silent 500 into a useful message.
-    return json(res, 500, {
-      error: `Server error: ${err?.message || String(err)}`,
-      stack: (err?.stack || "").slice(0, 1200)
-    });
+    const mime = data.mime || "image/png";
+    lastImageSrc = `data:${mime};base64,${b64}`;
+
+    // ✅ THIS IS THE DISPLAY: set src + show container
+    outImg.src = lastImageSrc;
+    outWrap.style.display = "block";
+
+    typeChip.textContent = data.type ? `TYPE: ${String(data.type).toUpperCase()}` : "TYPE: ???";
+    shillText.textContent = "POST IT • START SHILLING 🫡 • $COMCOIN";
+
+    setMsg("GENERATED. SAVE IT + POST IT.", "ok");
+    btnCopyTweet.disabled = false;
+    btnDownload.disabled = false;
+
+  } catch (e) {
+    setMsg(String(e?.message || e).toUpperCase(), "bad");
+  } finally {
+    // ✅ IMPORTANT: update numbers/buttons without overwriting the “GENERATED/ERROR” message
+    await refreshBalanceAndRank({ quiet: true });
   }
-}
+};
 
-function json(res, status, obj) {
-  res.status(status).setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(obj));
-}
+btnCopyTweet.onclick = async () => {
+  const text = `MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡`;
+  await navigator.clipboard.writeText(text);
+  setMsg("TWEET COPIED.", "ok");
+};
 
-/** ---------------------------
- *  Signature verification
- *  ---------------------------
- * Phantom signMessage uses ed25519.
- * signature is base58 string.
- */
-async function verifySolanaSignature({ pubkey, message, signature }) {
-  // Use @noble/ed25519 (tiny) via dynamic import from esm.sh
-  const ed = await import("https://esm.sh/@noble/ed25519@2.1.0");
-  const bs58 = await import("https://esm.sh/bs58@5.0.0");
+btnDownload.onclick = async () => {
+  if (!lastImageSrc) return;
+  const a = document.createElement("a");
+  a.href = lastImageSrc;
+  a.download = `comcoin-${Date.now()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setMsg("IF MOBILE OPENS IMAGE: SHARE → SAVE.", "ok");
+};
 
-  const sigBytes = bs58.default.decode(signature);
-  const pubBytes = bs58.default.decode(pubkey);
-  const msgBytes = new TextEncoder().encode(message);
-
-  return await ed.verify(sigBytes, msgBytes, pubBytes);
-}
-
-/** ---------------------------
- *  Upstash helpers
- *  --------------------------- */
-async function upstashGet(url, token, key) {
-  const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const j = await r.json().catch(() => null);
-  return j?.result ?? null;
-}
-
-async function upstashSet(url, token, key, value, ttlSeconds) {
-  // SET key value EX ttl
-  const r = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const j = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(`Upstash SET failed: ${JSON.stringify(j)}`);
-}
-
-/** ---------------------------
- *  SPL token balance
- *  --------------------------- */
-async function getUiTokenBalance({ rpcUrl, mint, owner }) {
-  // getTokenAccountsByOwner + parse "uiAmount" from tokenAmount
-  const payload = {
-    jsonrpc: "2.0",
-    id: 1,
-    method: "getTokenAccountsByOwner",
-    params: [
-      owner,
-      { mint },
-      { encoding: "jsonParsed" }
-    ]
-  };
-
-  const r = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  const j = await r.json();
-
-  if (!r.ok) throw new Error(`RPC error HTTP ${r.status}`);
-  if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error)}`);
-
-  const accounts = j?.result?.value || [];
-  let total = 0;
-  for (const acc of accounts) {
-    const uiAmount = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
-    if (typeof uiAmount === "number") total += uiAmount;
+// Auto-reconnect on load
+(async function autoReconnect() {
+  try {
+    const provider = window?.solana;
+    if (!provider?.isPhantom) return;
+    await connectPhantom({ onlyIfTrusted: true });
+  } catch {
+    setConnectedUI(false);
   }
-  return total;
-}
+})();
+
+showView("gen");

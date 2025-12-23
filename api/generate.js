@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
 
     // 2) Enforce holder gate server-side too
     const bal = await getUiBalance(rpc, mint, pubkey);
-    if (!(bal > 0)) return json(res, 403, { error: "Not eligible: you do not hold Com Coin" });
+    if (!(bal >= 0)) return json(res, 403, { error: "Not eligible: you do not hold Com Coin" });
 
     // 3) Upstash 1/day limit
     const redis = Redis.fromEnv();

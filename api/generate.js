@@ -1,8 +1,10 @@
 // api/generate.js
 const nacl = require("tweetnacl");
 const bs58 = require("bs58");
+const { TextEncoder } = require("util");
 
 module.exports = async function handler(req, res) {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -17,33 +19,33 @@ module.exports = async function handler(req, res) {
     const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
     const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    if (!openaiKey) return json(res, 500, { error: "Missing OPENAI_API_KEY env var" });
-    if (!rpcUrl) return json(res, 500, { error: "Missing SOLANA_RPC_URL env var" });
-    if (!mint) return json(res, 500, { error: "Missing COMCOIN_MINT env var" });
-    if (!upstashUrl || !upstashToken) return json(res, 500, { error: "Missing Upstash env vars" });
+    if (!openaiKey) return json(res, 500, { stage: "env", error: "Missing OPENAI_API_KEY env var" });
+    if (!rpcUrl) return json(res, 500, { stage: "env", error: "Missing SOLANA_RPC_URL env var" });
+    if (!mint) return json(res, 500, { stage: "env", error: "Missing COMCOIN_MINT env var" });
+    if (!upstashUrl || !upstashToken) return json(res, 500, { stage: "env", error: "Missing Upstash env vars" });
 
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const body = typeof req.body === "string" ? safeJson(req.body) : req.body;
     const { pubkey, message, signature } = body || {};
     if (!pubkey || !message || !signature) {
-      return json(res, 400, { error: "Missing pubkey/message/signature" });
+      return json(res, 400, { stage: "input", error: "Missing pubkey/message/signature" });
     }
 
-    // 1) Verify Phantom signature (ed25519)
+    // 1) Verify Phantom signature
     if (!verifySolanaSignature({ pubkey, message, signature })) {
-      return json(res, 401, { error: "Signature verification failed" });
+      return json(res, 401, { stage: "sig", error: "Signature verification failed" });
     }
 
-    // 2) Daily limit: 1/day per wallet (UTC)
+    // 2) Daily limit
     const today = new Date().toISOString().slice(0, 10);
     const limiterKey = `gen:${pubkey}:${today}`;
 
     const already = await upstashGet(upstashUrl, upstashToken, limiterKey);
-    if (already) return json(res, 429, { error: "Daily limit reached: 1 generation per day" });
+    if (already) return json(res, 429, { stage: "limit", error: "Daily limit reached: 1 generation per day" });
 
     await upstashSet(upstashUrl, upstashToken, limiterKey, "1", 26 * 60 * 60);
 
     // 3) Token gate (comment out for testing)
-
+  
     }
 
     // 4) Random type
@@ -94,23 +96,23 @@ Overall vibe:
     });
 
     const rawText = await oaiResp.text();
-    let out = null;
-    try { out = JSON.parse(rawText); } catch {}
+    const out = safeJson(rawText);
 
     if (!oaiResp.ok) {
-      return json(res, 502, { error: `OpenAI error: ${rawText.slice(0, 900)}` });
+      return json(res, 502, { stage: "openai", error: `OpenAI error: ${rawText.slice(0, 900)}` });
     }
 
     const b64 = out?.data?.[0]?.b64_json;
     if (!b64) {
-      return json(res, 502, { error: `OpenAI returned no b64_json. Raw: ${rawText.slice(0, 900)}` });
+      return json(res, 502, { stage: "openai", error: `OpenAI returned no b64_json. Raw: ${rawText.slice(0, 900)}` });
     }
 
     return json(res, 200, { image_b64: b64, mime: "image/png", type: pick });
   } catch (err) {
     return json(res, 500, {
+      stage: "catch",
       error: `Server error: ${err?.message || String(err)}`,
-      stack: (err?.stack || "").slice(0, 1200)
+      stack: (err?.stack || "").slice(0, 1400)
     });
   }
 };
@@ -120,12 +122,14 @@ function json(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+function safeJson(s) {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 function verifySolanaSignature({ pubkey, message, signature }) {
-  // Phantom returns signature bytes for the message bytes.
   const sigBytes = bs58.decode(signature);
   const pubBytes = bs58.decode(pubkey);
   const msgBytes = new TextEncoder().encode(message);
-
   return nacl.sign.detached.verify(msgBytes, sigBytes, pubBytes);
 }
 
@@ -133,7 +137,9 @@ async function upstashGet(url, token, key) {
   const r = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  const j = await r.json().catch(() => null);
+  const txt = await r.text();
+  const j = safeJson(txt);
+  if (!r.ok) throw new Error(`Upstash GET HTTP ${r.status}: ${txt.slice(0, 400)}`);
   return j?.result ?? null;
 }
 
@@ -142,8 +148,10 @@ async function upstashSet(url, token, key, value, ttlSeconds) {
     `${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(value)}?EX=${ttlSeconds}`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
-  const j = await r.json().catch(() => null);
-  if (!r.ok) throw new Error(`Upstash SET failed: ${JSON.stringify(j)}`);
+  const txt = await r.text();
+  const j = safeJson(txt);
+  if (!r.ok) throw new Error(`Upstash SET HTTP ${r.status}: ${txt.slice(0, 400)}`);
+  if (j?.error) throw new Error(`Upstash SET error: ${txt.slice(0, 400)}`);
 }
 
 async function getUiTokenBalance({ rpcUrl, mint, owner }) {
@@ -151,11 +159,7 @@ async function getUiTokenBalance({ rpcUrl, mint, owner }) {
     jsonrpc: "2.0",
     id: 1,
     method: "getTokenAccountsByOwner",
-    params: [
-      owner,
-      { mint },
-      { encoding: "jsonParsed" }
-    ]
+    params: [owner, { mint }, { encoding: "jsonParsed" }]
   };
 
   const r = await fetch(rpcUrl, {
@@ -164,9 +168,11 @@ async function getUiTokenBalance({ rpcUrl, mint, owner }) {
     body: JSON.stringify(payload)
   });
 
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`RPC error HTTP ${r.status}`);
-  if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error)}`);
+  const txt = await r.text();
+  const j = safeJson(txt);
+
+  if (!r.ok) throw new Error(`RPC HTTP ${r.status}: ${txt.slice(0, 400)}`);
+  if (j?.error) throw new Error(`RPC error: ${JSON.stringify(j.error).slice(0, 400)}`);
 
   const accounts = j?.result?.value || [];
   let total = 0;

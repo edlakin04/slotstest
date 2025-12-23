@@ -14,7 +14,7 @@
       --bg0:#04160B;
       --bg1:#062011;
 
-      /* UI is NOT see-through now */
+      /* UI is solid (not see-through) */
       --uiSolid: rgba(0,0,0,.92);
       --panelSolid: rgba(0,0,0,.92);
 
@@ -45,9 +45,9 @@
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Scroll driver (makes it feel endless) */
+    /* Scroll driver: gives you lots of scroll distance */
     .scrollSpace{
-      height: 600vh; /* lots of scroll */
+      height: 900vh;
       pointer-events:none;
       opacity:0;
     }
@@ -60,9 +60,6 @@
       overflow-x: hidden;
       z-index: 5;
       padding-bottom: 40px;
-      /* solid overlay so background doesn't show through */
-      background: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.06));
-      backdrop-filter: none;
     }
 
     .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
@@ -82,7 +79,7 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    /* BIG BRIGHT SOLID $ LAYER (continuous scroll via tiling) */
+    /* BIG BRIGHT SOLID $ LAYER (endless) */
     .bgDollars{
       position: fixed;
       inset: 0;
@@ -91,12 +88,12 @@
       overflow:hidden;
     }
 
-    /* Two identical fields create an endless loop */
+    /* Two identical fields = seamless tiling */
     .dollarField{
       position:absolute;
       left:0; right:0;
       width:100%;
-      height: 220vh; /* taller than viewport */
+      height: 220vh; /* used by JS loop constant */
       transform: translateY(var(--bgShiftY));
       will-change: transform;
     }
@@ -108,14 +105,14 @@
       font-family: var(--pix);
       color: #00FF57;              /* solid bright green */
       text-shadow:
-        0 10px 0 rgba(0,0,0,.38),  /* chunky pixel shadow */
+        0 10px 0 rgba(0,0,0,.40),
         0 0 28px rgba(0,255,87,.22);
       opacity: 1;
       transform: rotate(var(--r));
       user-select:none;
     }
 
-    /* Pixel UI helpers (NOW SOLID) */
+    /* Pixel UI helpers (SOLID) */
     .px-border{
       border: 4px solid var(--border);
       box-shadow:
@@ -164,7 +161,7 @@
     .tab{
       padding: 12px 12px;
       border: 4px solid var(--border);
-      background: rgba(0,0,0,.75);
+      background: rgba(0,0,0,.80);
       box-shadow: 0 6px 0 rgba(0,0,0,.45);
       cursor:pointer;
       font-size: 10px;
@@ -329,7 +326,6 @@
       color: var(--text);
     }
 
-    /* How it works fits inside */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
@@ -354,7 +350,7 @@
     }
     .step{
       display:grid;
-      grid-template-columns: 28px 1fr; /* more space -> "move right" */
+      grid-template-columns: 28px 1fr;
       gap:10px;
       align-items:start;
       min-width:0;
@@ -407,11 +403,10 @@
 <body>
   <div class="bg"></div>
 
-  <!-- Continuous dollar scroll layer (two identical fields) -->
+  <!-- Endless $ scroll: two identical blocks; we wrap the translate into [0, fieldHeightPx) -->
   <div class="bgDollars" aria-hidden="true">
-    <div class="dollarField fieldA" id="fieldA">
-      <!-- Bigger & more $ signs -->
-      <div class="dollar" style="top:6%; left:10%;  --r:-6deg; font-size:90px;">$</div>
+    <div class="dollarField fieldA">
+      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:90px;">$</div>
       <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
       <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
       <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
@@ -423,16 +418,14 @@
       <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
       <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
       <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
-
       <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
       <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
       <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
       <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:78px;">$</div>
     </div>
 
-    <div class="dollarField fieldB" id="fieldB">
-      <!-- exact clone for seamless loop -->
-      <div class="dollar" style="top:6%; left:10%;  --r:-6deg; font-size:90px;">$</div>
+    <div class="dollarField fieldB">
+      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:90px;">$</div>
       <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
       <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
       <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
@@ -444,7 +437,6 @@
       <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
       <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
       <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
-
       <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
       <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
       <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
@@ -545,27 +537,30 @@
     </div>
   </div>
 
-  <!-- Invisible page scroll driver -->
+  <!-- Invisible scroll driver -->
   <div class="scrollSpace"></div>
 
   <script>
-    // Continuous background motion:
-    // We mod the scroll position by the field height so it never "stops".
+    // FIXED DIRECTION + TRUE LOOP:
+    // When you scroll DOWN, dollars should move DOWN (same direction), but slower (parallax).
+    // Wrap into [0, loopPx) so it never stops.
     const root = document.documentElement;
-    const FIELD_HEIGHT_VH = 220; // must match .dollarField height
     function onScroll() {
       const y = window.scrollY || 0;
-      // Convert px scroll to a looping vh-ish shift (simple loop effect)
-      // Use a big divisor so it moves slower than scroll (parallax).
-      const shift = -(y * 0.8);
 
-      // Loop it so it never ends:
-      // We'll wrap shift into a range [-window.innerHeight*2, 0] roughly.
-      const loopPx = (window.innerHeight * (FIELD_HEIGHT_VH / 100));
-      const wrapped = ((shift % loopPx) + loopPx) % loopPx;
-      // translate upward by wrapped amount
-      root.style.setProperty("--bgShiftY", `${-wrapped}px`);
+      // field height in px (220vh)
+      const loopPx = window.innerHeight * 2.2;
+
+      // move SAME direction as scroll, but slower:
+      const raw = (y * 0.6);
+
+      // wrap raw into [0, loopPx)
+      const wrapped = ((raw % loopPx) + loopPx) % loopPx;
+
+      // translate DOWN by wrapped pixels
+      root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }
+
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
   </script>

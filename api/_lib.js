@@ -3,11 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
 
-export const sql = neon(process.env.NEON_DATABASE_URL);
+export const sql = neon(process.env.NEON_DATABASE_URL || "");
 
 export const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   { auth: { persistSession: false } }
 );
 
@@ -23,8 +23,15 @@ export function requireEnv(name) {
   return v;
 }
 
+export async function readJson(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString("utf8");
+  return raw ? JSON.parse(raw) : {};
+}
+
 export function verifyPhantomSign({ pubkey, message, signature }) {
-  // signature is base58
   const sig = bs58.decode(signature);
   const pk = bs58.decode(pubkey);
   const msg = new TextEncoder().encode(message);
@@ -33,8 +40,6 @@ export function verifyPhantomSign({ pubkey, message, signature }) {
 }
 
 export function makeCardId() {
-  // simple unique id, URL-friendly
-  // CC_ + time + random
   const t = Date.now().toString(36);
   const r = Math.random().toString(36).slice(2, 10);
   return `CC_${t}_${r}`.toUpperCase();
@@ -48,4 +53,8 @@ export function randomMemeName() {
   const n = NOUN[Math.floor(Math.random() * NOUN.length)];
   const s = Math.floor(Math.random() * 9999).toString().padStart(4, "0");
   return `${a} ${n} #${s}`;
+}
+
+export function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }

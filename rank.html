@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>COM COIN — Ranks</title>
-  <meta name="description" content="COM COIN ranks and holder levels." />
+  <title>COM COIN — Your Rank</title>
   <style>
     :root{
-      --bg0:#070A12;
-      --bg1:#0B1022;
-      --card: rgba(255,255,255,.06);
-      --border: rgba(255,255,255,.12);
-      --text:#EAF0FF;
-      --muted: rgba(234,240,255,.72);
+      --bg0:#05060C;
+      --bg1:#070A12;
+      --border: rgba(255,255,255,.14);
+      --text:#F2F5FF;
+      --muted: rgba(242,245,255,.72);
       --accent:#7C5CFF;
       --accent2:#00D4FF;
-      --shadow: 0 14px 50px rgba(0,0,0,.45);
-      --radius: 18px;
+      --hot:#FF4D6D;
+      --good:#2EE59D;
+      --shadow: 0 18px 70px rgba(0,0,0,.55);
+      --radius: 22px;
     }
     *{ box-sizing:border-box; }
     body{
@@ -24,103 +24,114 @@
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:var(--text);
       background:
-        radial-gradient(900px 500px at 15% 10%, rgba(124,92,255,.28), transparent 60%),
-        radial-gradient(900px 500px at 85% 15%, rgba(0,212,255,.20), transparent 60%),
+        radial-gradient(900px 520px at 15% 10%, rgba(124,92,255,.33), transparent 60%),
+        radial-gradient(900px 520px at 85% 10%, rgba(0,212,255,.24), transparent 60%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
     }
     a{ color:inherit; text-decoration:none; }
-    .wrap{ max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+    .wrap{ max-width:1000px; margin:0 auto; padding:18px 16px 64px; }
     .topbar{
       display:flex; align-items:center; justify-content:space-between; gap:12px;
       padding:12px 14px;
       border:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      border-radius: 999px;
       box-shadow: var(--shadow);
-      position: sticky; top: 12px; backdrop-filter: blur(14px);
-      z-index: 50;
+      backdrop-filter: blur(14px);
     }
     .brand{ display:flex; align-items:center; gap:12px; }
     .logo{
-      width:38px; height:38px; border-radius: 14px;
+      width:40px; height:40px; border-radius: 16px;
       background:
         radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 40%),
         linear-gradient(135deg, var(--accent), var(--accent2));
-      box-shadow: 0 10px 30px rgba(124,92,255,.25);
       border:1px solid rgba(255,255,255,.18);
+      box-shadow: 0 14px 40px rgba(124,92,255,.30);
     }
-    .brand h1{ font-size:16px; margin:0; letter-spacing:.06em; }
-    .brand .tag{ font-size:12px; color:var(--muted); margin-top:2px; }
+    .name{ font-size:14px; font-weight: 900; letter-spacing:.18em; }
+    .tag{ font-size:12px; color:var(--muted); margin-top:2px; }
     .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
     .tab{
       padding:10px 12px;
       border:1px solid var(--border);
       border-radius: 999px;
-      background: rgba(255,255,255,.04);
+      background: rgba(255,255,255,.05);
       color: var(--muted);
       font-size: 13px;
-      transition: .15s ease;
     }
-    .tab:hover{ background: rgba(255,255,255,.08); color: var(--text); }
     .tab.primary{
-      background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(0,212,255,.18));
+      background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(0,212,255,.22));
       color: var(--text);
-      border-color: rgba(255,255,255,.18);
+      border-color: rgba(255,255,255,.20);
     }
+    .btn{
+      appearance:none; border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      padding:11px 14px;
+      border-radius: 999px;
+      cursor:pointer;
+      font-weight: 850;
+      letter-spacing:.02em;
+      transition: .15s ease;
+      box-shadow: 0 10px 26px rgba(0,0,0,.30);
+    }
+    .btn:disabled{ opacity:.45; cursor:not-allowed; }
     .panel{
-      margin-top: 18px;
+      margin-top: 16px;
       border:1px solid var(--border);
       border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05));
       box-shadow: var(--shadow);
       padding: 18px;
     }
-    h2{ margin: 0 0 8px; font-size: 30px; }
-    p{ margin:0; color:var(--muted); line-height:1.6; }
-    .table{
+    h2{ margin:0 0 8px; font-size: 34px; font-weight: 950; letter-spacing:.02em; text-transform: uppercase; }
+    p{ margin:0; color: var(--muted); line-height: 1.6; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .grid{
       margin-top: 14px;
-      border:1px solid var(--border);
-      border-radius: 16px;
-      overflow:hidden;
-      background: rgba(255,255,255,.05);
-    }
-    .row{
       display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap: 10px;
-      padding: 12px 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-      align-items:center;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
     }
-    .row:first-child{ border-top:0; }
-    .head{
-      background: rgba(255,255,255,.06);
-      font-weight: 750;
-      color: var(--text);
-    }
-    .badge{
-      display:inline-flex; align-items:center; gap:8px;
-      padding: 7px 10px;
-      border-radius: 999px;
+    @media (max-width: 900px){ .grid{ grid-template-columns: 1fr; } }
+    .card{
       border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
       background: rgba(255,255,255,.06);
-      width: fit-content;
+      padding: 12px 14px;
+    }
+    .k{ font-size:12px; color: var(--muted); }
+    .v{ margin-top:6px; font-size: 15px; font-weight: 900; }
+    .rankBadge{
+      display:inline-flex; align-items:center; gap:10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      margin-top: 12px;
+      font-weight: 950;
+      letter-spacing: .06em;
+      text-transform: uppercase;
     }
     .dot{
-      width:10px; height:10px; border-radius: 999px;
+      width:12px; height:12px; border-radius: 999px;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
-      box-shadow: 0 8px 22px rgba(124,92,255,.35);
+      box-shadow: 0 14px 40px rgba(124,92,255,.30);
     }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
-    .tip{
-      margin-top: 12px;
-      padding: 12px 14px;
-      border-radius: 16px;
+    .callout{
+      margin-top: 14px;
       border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
       background: rgba(255,255,255,.05);
+      padding: 14px;
       color: var(--muted);
+      line-height: 1.6;
       font-size: 13px;
     }
+    .msg{ margin-top: 10px; min-height: 22px; color: var(--muted); font-size: 13px; }
+    .msg.ok{ color: rgba(46,229,157,.95); }
+    .msg.bad{ color: rgba(255,77,109,.98); }
   </style>
 </head>
 <body>
@@ -129,57 +140,148 @@
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div>
-          <h1>COM COIN</h1>
-          <div class="tag">Ranks • holder levels</div>
+          <div class="name">COM COIN</div>
+          <div class="tag">your rank • holder level</div>
         </div>
       </div>
 
       <div class="tabs">
         <a class="tab" href="/">Generator</a>
-        <a class="tab primary" href="/rank">Ranks</a>
+        <a class="tab primary" href="/rank">Rank</a>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn" id="btnConnect">Connect Phantom</button>
+        <button class="btn" id="btnDisconnect" disabled>Disconnect</button>
       </div>
     </div>
 
     <div class="panel">
-      <h2>Holder Levels</h2>
-      <p>
-        These are the COM COIN ranks shown on the generator page.
-        They’re based on your <b>token amount</b> (SPL balance).
-      </p>
+      <h2>Your Rank</h2>
+      <p>Connect Phantom to see your COM COIN level. No database. Just wallet balance.</p>
 
-      <div class="table" role="table" aria-label="COM COIN ranks">
-        <div class="row head" role="row">
-          <div role="columnheader">Rank</div>
-          <div role="columnheader">Minimum COM COIN</div>
+      <div class="grid">
+        <div class="card">
+          <div class="k">Wallet</div>
+          <div class="v mono" id="wallet">Not connected</div>
         </div>
-
-        <div class="row" role="row">
-          <div role="cell"><span class="badge"><span class="dot"></span>Dust</span></div>
-          <div role="cell" class="mono">0</div>
+        <div class="card">
+          <div class="k">COM COIN balance</div>
+          <div class="v" id="balance">—</div>
         </div>
-        <div class="row" role="row">
-          <div role="cell"><span class="badge"><span class="dot"></span>Hodler</span></div>
-          <div role="cell" class="mono">1</div>
-        </div>
-        <div class="row" role="row">
-          <div role="cell"><span class="badge"><span class="dot"></span>Shiller</span></div>
-          <div role="cell" class="mono">1,000</div>
-        </div>
-        <div class="row" role="row">
-          <div role="cell"><span class="badge"><span class="dot"></span>Chad</span></div>
-          <div role="cell" class="mono">10,000</div>
-        </div>
-        <div class="row" role="row">
-          <div role="cell"><span class="badge"><span class="dot"></span>Whale</span></div>
-          <div role="cell" class="mono">100,000</div>
+        <div class="card">
+          <div class="k">Next rank at</div>
+          <div class="v" id="next">—</div>
         </div>
       </div>
 
-      <div class="tip">
-        If you want, you can change these thresholds later (it’s just numbers in <span class="mono">main.js</span>).
-        The <b>gate</b> to generate is currently: <span class="mono">balance &gt; 0</span>.
+      <div class="rankBadge" id="rankBadge" style="display:none;">
+        <span class="dot"></span>
+        <span id="rankName">—</span>
       </div>
+
+      <div class="callout" id="callout">
+        Connect your wallet to get your rank.
+      </div>
+
+      <div class="msg" id="msg"></div>
     </div>
   </div>
+
+  <script type="module">
+    function setMsg(text, kind="muted"){
+      const el = document.getElementById("msg");
+      el.classList.remove("ok","bad");
+      if (kind==="ok") el.classList.add("ok");
+      if (kind==="bad") el.classList.add("bad");
+      el.textContent = text || "";
+    }
+    function requirePhantom(){
+      const p = window?.solana;
+      if (!p?.isPhantom) throw new Error("Phantom not found. Install Phantom and refresh.");
+      return p;
+    }
+
+    const RANKS = [
+      { name: "Dust", min: 0 },
+      { name: "Hodler", min: 1 },
+      { name: "Shiller", min: 1_000 },
+      { name: "Chad", min: 10_000 },
+      { name: "Whale", min: 100_000 },
+    ];
+    function getRank(amount){
+      return [...RANKS].reverse().find(r => amount >= r.min) ?? RANKS[0];
+    }
+    function nextRank(amount){
+      return RANKS.find(r => r.min > amount) || null;
+    }
+
+    const btnConnect = document.getElementById("btnConnect");
+    const btnDisconnect = document.getElementById("btnDisconnect");
+    const elWallet = document.getElementById("wallet");
+    const elBalance = document.getElementById("balance");
+    const elNext = document.getElementById("next");
+    const badge = document.getElementById("rankBadge");
+    const rankName = document.getElementById("rankName");
+    const callout = document.getElementById("callout");
+
+    let pk = null;
+
+    async function refresh(){
+      if (!pk) return;
+      setMsg("Checking your COM COIN…");
+      const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(pk)}`);
+      const data = await res.json().catch(()=>({}));
+      if (!res.ok){
+        setMsg(data?.error || "Balance check failed.", "bad");
+        return;
+      }
+      const amt = Number(data.uiAmount || 0);
+      elBalance.textContent = amt.toLocaleString("en-GB");
+
+      const r = getRank(amt);
+      const n = nextRank(amt);
+
+      badge.style.display = "inline-flex";
+      rankName.textContent = r.name;
+
+      elNext.textContent = n ? `${n.min.toLocaleString("en-GB")} (${n.name})` : "MAXED (Whale)";
+
+      if (amt <= 0){
+        callout.innerHTML = `You own <b>no COM COIN</b>. Buy some to rank up and unlock the generator.`;
+        setMsg("No tokens detected.", "bad");
+      } else {
+        callout.innerHTML = `You’re ranked <b>${r.name}</b>. Keep stacking to hit the next level.`;
+        setMsg("Rank loaded.", "ok");
+      }
+    }
+
+    btnConnect.onclick = async () => {
+      try{
+        const p = requirePhantom();
+        const resp = await p.connect();
+        pk = resp.publicKey.toBase58();
+        elWallet.textContent = pk;
+        btnConnect.disabled = true;
+        btnDisconnect.disabled = false;
+        await refresh();
+      } catch(e){
+        setMsg(e?.message || String(e), "bad");
+      }
+    };
+
+    btnDisconnect.onclick = async () => {
+      try{ await requirePhantom().disconnect(); } catch {}
+      pk = null;
+      elWallet.textContent = "Not connected";
+      elBalance.textContent = "—";
+      elNext.textContent = "—";
+      badge.style.display = "none";
+      callout.textContent = "Connect your wallet to get your rank.";
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      setMsg("");
+    };
+  </script>
 </body>
 </html>

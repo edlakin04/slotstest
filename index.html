@@ -3,23 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>COM COIN — Daily Pixel Meme Generator</title>
-  <meta name="description" content="COM COIN — Phantom-gated daily pixel meme generator. Generate your daily pull and post it to Twitter." />
+  <title>COM COIN — Daily Pixel Meme Pull</title>
+  <meta name="description" content="COM COIN — Phantom-gated daily pixel meme pull. Generate once per day and post it on Twitter." />
   <style>
     :root{
-      --bg0:#070A12;
-      --bg1:#0B1022;
-      --card: rgba(255,255,255,.06);
-      --card2: rgba(255,255,255,.09);
-      --border: rgba(255,255,255,.12);
-      --text:#EAF0FF;
-      --muted: rgba(234,240,255,.72);
+      --bg0:#05060C;
+      --bg1:#070A12;
+      --card: rgba(255,255,255,.07);
+      --card2: rgba(255,255,255,.10);
+      --border: rgba(255,255,255,.14);
+      --text:#F2F5FF;
+      --muted: rgba(242,245,255,.72);
       --accent:#7C5CFF;
       --accent2:#00D4FF;
+      --hot:#FF4D6D;
       --good:#2EE59D;
       --bad:#FF4D6D;
-      --shadow: 0 14px 50px rgba(0,0,0,.45);
-      --radius: 18px;
+      --shadow: 0 18px 70px rgba(0,0,0,.55);
+      --radius: 22px;
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -28,191 +29,275 @@
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:var(--text);
       background:
-        radial-gradient(900px 500px at 15% 10%, rgba(124,92,255,.28), transparent 60%),
-        radial-gradient(900px 500px at 85% 15%, rgba(0,212,255,.20), transparent 60%),
-        radial-gradient(900px 600px at 50% 90%, rgba(46,229,157,.12), transparent 65%),
+        radial-gradient(900px 520px at 15% 10%, rgba(124,92,255,.33), transparent 60%),
+        radial-gradient(900px 520px at 85% 10%, rgba(0,212,255,.24), transparent 60%),
+        radial-gradient(900px 700px at 50% 92%, rgba(255,77,109,.12), transparent 65%),
         linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x:hidden;
     }
     a{ color:inherit; text-decoration:none; }
-    .wrap{ max-width:1100px; margin:0 auto; padding:24px 16px 60px; }
+
+    /* big memey background text */
+    .bgWords{
+      position: fixed;
+      inset: 0;
+      pointer-events:none;
+      opacity: .10;
+      filter: blur(.2px);
+      display:grid;
+      place-items:center;
+      z-index:0;
+    }
+    .bgWords .w{
+      font-weight: 950;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-size: clamp(42px, 7vw, 96px);
+      transform: rotate(-8deg);
+      background: linear-gradient(135deg, rgba(124,92,255,.95), rgba(0,212,255,.85), rgba(255,77,109,.85));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 30px 120px rgba(0,0,0,.55);
+      animation: floaty 6.5s ease-in-out infinite;
+      text-align:center;
+      padding: 0 14px;
+    }
+    @keyframes floaty{
+      0%,100%{ transform: translateY(0) rotate(-8deg); }
+      50%{ transform: translateY(-10px) rotate(-8deg); }
+    }
+
+    .wrap{ max-width:1100px; margin:0 auto; padding:18px 16px 64px; position:relative; z-index:1; }
+
     .topbar{
       display:flex; align-items:center; justify-content:space-between; gap:12px;
       padding:12px 14px;
       border:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      border-radius: 999px;
       box-shadow: var(--shadow);
-      position: sticky; top: 12px; backdrop-filter: blur(14px);
-      z-index: 50;
+      backdrop-filter: blur(14px);
     }
     .brand{ display:flex; align-items:center; gap:12px; }
     .logo{
-      width:38px; height:38px; border-radius: 14px;
+      width:40px; height:40px; border-radius: 16px;
       background:
         radial-gradient(circle at 30% 30%, rgba(255,255,255,.35), transparent 40%),
         linear-gradient(135deg, var(--accent), var(--accent2));
-      box-shadow: 0 10px 30px rgba(124,92,255,.25);
+      box-shadow: 0 14px 40px rgba(124,92,255,.30);
       border:1px solid rgba(255,255,255,.18);
     }
-    .brand h1{ font-size:16px; margin:0; letter-spacing:.06em; }
+    .brand .name{ font-size:14px; font-weight: 900; letter-spacing:.18em; }
     .brand .tag{ font-size:12px; color:var(--muted); margin-top:2px; }
+
     .tabs{ display:flex; gap:8px; flex-wrap:wrap; }
     .tab{
       padding:10px 12px;
       border:1px solid var(--border);
       border-radius: 999px;
-      background: rgba(255,255,255,.04);
+      background: rgba(255,255,255,.05);
       color: var(--muted);
       font-size: 13px;
       transition: .15s ease;
     }
-    .tab:hover{ background: rgba(255,255,255,.08); color: var(--text); }
+    .tab:hover{ background: rgba(255,255,255,.09); color: var(--text); }
     .tab.primary{
-      background: linear-gradient(135deg, rgba(124,92,255,.25), rgba(0,212,255,.18));
+      background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(0,212,255,.22));
       color: var(--text);
-      border-color: rgba(255,255,255,.18);
+      border-color: rgba(255,255,255,.20);
     }
+
     .btn{
       appearance:none; border:1px solid var(--border);
       background: rgba(255,255,255,.06);
       color: var(--text);
-      padding:10px 12px;
+      padding:11px 14px;
       border-radius: 999px;
       cursor:pointer;
-      font-weight: 650;
+      font-weight: 850;
       letter-spacing:.02em;
       transition: .15s ease;
-      box-shadow: 0 10px 24px rgba(0,0,0,.25);
+      box-shadow: 0 10px 26px rgba(0,0,0,.30);
     }
     .btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.09); }
     .btn:disabled{ opacity:.45; cursor:not-allowed; transform:none; }
+
     .btn.accent{
-      border-color: rgba(124,92,255,.45);
-      background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(0,212,255,.22));
+      border-color: rgba(124,92,255,.55);
+      background: linear-gradient(135deg, rgba(124,92,255,.45), rgba(0,212,255,.28));
     }
-    .hero{
-      display:grid;
-      grid-template-columns: 1.25fr .75fr;
-      gap:16px;
-      margin-top:18px;
-    }
-    @media (max-width: 880px){
-      .hero{ grid-template-columns: 1fr; }
-    }
-    .panel{
+
+    /* center stage generator */
+    .stage{
+      margin-top: 18px;
       border:1px solid var(--border);
       border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05));
       box-shadow: var(--shadow);
-      padding: 18px;
+      padding: 22px;
+      position:relative;
+      overflow:hidden;
     }
-    .hero h2{ margin:0 0 8px; font-size: 34px; letter-spacing:.02em; }
-    .hero p{ margin:0; color:var(--muted); line-height:1.5; }
-    .pillrow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
-    .pill{
-      border:1px solid var(--border);
-      background: rgba(255,255,255,.05);
-      padding:8px 10px;
-      border-radius: 999px;
-      font-size: 12px;
+    .stage:before{
+      content:"";
+      position:absolute; inset:-2px;
+      background: radial-gradient(800px 280px at 30% 0%, rgba(124,92,255,.25), transparent 60%),
+                  radial-gradient(800px 280px at 70% 0%, rgba(0,212,255,.18), transparent 60%);
+      pointer-events:none;
+      opacity:.8;
+    }
+    .stageInner{ position:relative; z-index:1; display:grid; gap:16px; justify-items:center; text-align:center; }
+
+    .headline{
+      margin:0;
+      font-size: clamp(34px, 5vw, 58px);
+      font-weight: 950;
+      letter-spacing: .02em;
+      line-height: 1.02;
+      text-transform: uppercase;
+    }
+    .headline .shine{
+      background: linear-gradient(135deg, rgba(124,92,255,1), rgba(0,212,255,1), rgba(255,77,109,1));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: shimmer 2.4s linear infinite;
+      background-size: 200% 100%;
+    }
+    @keyframes shimmer{
+      0%{ background-position: 0% 50%; }
+      100%{ background-position: 200% 50%; }
+    }
+
+    .sub{
+      margin:0;
       color: var(--muted);
+      max-width: 760px;
+      line-height: 1.55;
+      font-size: 15px;
     }
-    .pill b{ color: var(--text); font-weight:700; }
-    .grid{
+
+    .stats{
+      width:100%;
       display:grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
-      margin-top: 14px;
+      margin-top: 6px;
     }
-    @media (max-width: 880px){
-      .grid{ grid-template-columns: 1fr; }
+    @media (max-width: 900px){
+      .stats{ grid-template-columns: 1fr; }
     }
     .stat{
-      border:1px solid var(--border);
-      border-radius: 16px;
-      background: rgba(255,255,255,.05);
-      padding: 12px 12px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      background: rgba(255,255,255,.06);
+      padding: 12px 14px;
+      text-align:left;
     }
-    .stat .k{ font-size: 12px; color: var(--muted); }
-    .stat .v{ font-size: 16px; margin-top: 6px; font-weight: 750; }
-    .sectionTitle{
-      display:flex; align-items:flex-end; justify-content:space-between; gap:12px;
-      margin-top: 18px;
-      margin-bottom: 10px;
-    }
-    .sectionTitle h3{ margin:0; font-size: 18px; }
-    .sectionTitle .hint{ color: var(--muted); font-size: 13px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .k{ font-size:12px; color: var(--muted); }
+    .v{ margin-top:6px; font-size: 15px; font-weight: 900; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
-    .msg{ color: var(--muted); margin-top: 10px; min-height: 22px; }
-    .msg.ok{ color: rgba(46,229,157,.9); }
-    .msg.bad{ color: rgba(255,77,109,.95); }
-    .divider{ height:1px; background: var(--border); margin: 16px 0; }
+
+    .actions{
+      display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+      margin-top: 6px;
+    }
+
+    .msg{
+      min-height: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 820px;
+    }
+    .msg.ok{ color: rgba(46,229,157,.95); }
+    .msg.bad{ color: rgba(255,77,109,.98); }
+
     .out{
-      display:none;
-      margin-top: 12px;
-      border:1px solid var(--border);
-      border-radius: 16px;
-      background: rgba(255,255,255,.05);
+      width: 100%;
+      max-width: 820px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      background: rgba(255,255,255,.06);
       padding: 12px;
+      display:none;
+      text-align:left;
     }
     .out img{
       width:100%;
-      border-radius: 14px;
+      border-radius: 16px;
       border: 1px solid rgba(255,255,255,.10);
-      background: rgba(0,0,0,.15);
+      background: rgba(0,0,0,.20);
+      display:block;
     }
-    .copybox{
-      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-      margin-top: 10px;
+    .shillLine{
+      margin: 10px 2px 2px;
+      color: var(--muted);
+      font-size: 13px;
+      display:flex;
+      flex-wrap:wrap;
+      gap: 10px;
+      align-items:center;
+      justify-content:space-between;
     }
+    .shillLine b{ color: var(--text); }
+    .hint{
+      border:1px solid rgba(255,255,255,.14);
+      border-radius: 18px;
+      background: rgba(255,255,255,.05);
+      padding: 14px 16px;
+      margin-top: 16px;
+      max-width: 820px;
+      width: 100%;
+      text-align:left;
+    }
+    .hint h3{ margin:0 0 6px; font-size: 14px; letter-spacing:.06em; text-transform: uppercase; }
+    .hint ol{ margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.7; font-size: 13px; }
+
     .footer{
-      margin-top: 26px;
+      margin-top: 20px;
       color: var(--muted);
       font-size: 12px;
-      text-align: center;
+      text-align:center;
+      opacity: .85;
     }
-    .tiny{ font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
+  <div class="bgWords" aria-hidden="true">
+    <div class="w">START SHILLING TODAY</div>
+  </div>
+
   <div class="wrap">
     <div class="topbar">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
         <div>
-          <h1>COM COIN</h1>
-          <div class="tag">Daily pixel meme pull • Phantom gated</div>
+          <div class="name">COM COIN</div>
+          <div class="tag">daily pixel pull • phantom gated • 1/day</div>
         </div>
       </div>
 
       <div class="tabs" role="navigation" aria-label="Primary">
         <a class="tab primary" href="/">Generator</a>
         <a class="tab" href="/rank">Ranks</a>
-        <a class="tab" href="#how">How it works</a>
       </div>
 
-      <div class="row">
+      <div class="actions">
         <button class="btn" id="btnConnect">Connect Phantom</button>
         <button class="btn" id="btnDisconnect" disabled>Disconnect</button>
       </div>
     </div>
 
-    <div class="hero">
-      <div class="panel">
-        <h2>Pull your daily pixel meme.</h2>
-        <p>
-          Connect Phantom. If you hold <b>COM COIN</b>, you unlock one meme generation per day.
-          The type is random: <span class="mono">animal / tech billionaire / celebrity / politician</span>.
+    <div class="stage">
+      <div class="stageInner">
+        <h2 class="headline"><span class="shine">PULL YOUR DAILY MEME</span></h2>
+        <p class="sub">
+          One click. Random type. Pixel vibe. It stamps <b>COM COIN</b> on the bottom.
+          Post it on X/Twitter with <span class="mono">#ComCoin</span> and go raid the timeline.
         </p>
 
-        <div class="pillrow">
-          <div class="pill"><b>Token-gated</b> (SPL mint)</div>
-          <div class="pill"><b>1/day</b> per wallet</div>
-          <div class="pill"><b>Twitter-native</b> (you post it)</div>
-        </div>
-
-        <div class="grid">
+        <div class="stats">
           <div class="stat">
             <div class="k">Wallet</div>
             <div class="v mono" id="wallet">Not connected</div>
@@ -227,61 +312,35 @@
           </div>
         </div>
 
-        <div class="divider"></div>
-
-        <div class="sectionTitle">
-          <h3>Generator</h3>
-          <div class="hint">Eligible holders can generate once per day.</div>
-        </div>
-
-        <div class="row">
-          <button class="btn accent" id="btnGenerate" disabled>Generate image now</button>
-          <button class="btn" id="btnCopyTweet" disabled>Copy tweet</button>
-          <button class="btn" id="btnDownload" disabled>Download PNG</button>
+        <div class="actions">
+          <button class="btn accent" id="btnGenerate" disabled>GENERATE IMAGE NOW</button>
+          <button class="btn" id="btnCopyTweet" disabled>COPY TWEET</button>
+          <button class="btn" id="btnDownload" disabled>SAVE IMAGE</button>
         </div>
 
         <div class="msg" id="msg"></div>
 
         <div class="out" id="outCard">
-          <img id="outImg" alt="COM COIN meme output" />
-          <div class="copybox">
-            <div class="tiny" id="shillText">
-              Post it with <span class="mono">#ComCoin</span>. Start shilling 🫡
-            </div>
+          <img id="outImg" alt="COM COIN output" />
+          <div class="shillLine">
+            <div id="shillText"><b>Now:</b> post it with <span class="mono">#ComCoin</span> • start shilling 🫡</div>
+            <div class="mono" id="typeChip"></div>
           </div>
         </div>
-      </div>
 
-      <div class="panel" id="how">
-        <div class="sectionTitle" style="margin-top:0;">
+        <div class="hint">
           <h3>How it works</h3>
-          <div class="hint">Simple on purpose.</div>
+          <ol>
+            <li>Connect Phantom.</li>
+            <li>If you hold COM COIN, you get 1 generation per day.</li>
+            <li>Download + post to X/Twitter with <span class="mono">#ComCoin</span>.</li>
+          </ol>
         </div>
-        <ol class="tiny" style="line-height:1.7; margin:0; padding-left:18px;">
-          <li>Connect Phantom.</li>
-          <li>We check if you hold COM COIN.</li>
-          <li>You get <b>one</b> generation per day.</li>
-          <li>Download it, then post it on Twitter with <span class="mono">#ComCoin</span>.</li>
-        </ol>
 
-        <div class="divider"></div>
-
-        <div class="sectionTitle" style="margin-top:0;">
-          <h3>Shill script</h3>
-          <div class="hint">Copy/paste fuel</div>
-        </div>
-        <p class="tiny" style="margin:0 0 10px;">
-          Use the “Copy tweet” button or freestyle:
-        </p>
-        <div class="stat">
-          <div class="k">Default tweet</div>
-          <div class="v tiny mono" id="tweetPreview">My COM COIN daily pull is in. #ComCoin start shilling 🫡</div>
+        <div class="footer">
+          No approvals. No spending permissions. We only verify your wallet and (optionally) your holding.
         </div>
       </div>
-    </div>
-
-    <div class="footer">
-      COM COIN — built for memes. No approvals. No spending permissions. We only verify wallet ownership and token holding.
     </div>
 
     <script type="module" src="/main.js"></script>

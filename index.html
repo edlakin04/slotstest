@@ -2,10 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-
-  <!-- Force same layout on phone (scaled down, not reflowed) -->
   <meta name="viewport" content="width=1050, initial-scale=1" />
-
   <title>COM COIN — Start Shilling Today</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,14 +46,12 @@
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Scroll driver (infinite loop logic keeps it endless) */
     .scrollSpace{
       height: 500vh;
       pointer-events:none;
       opacity:0;
     }
 
-    /* Fixed UI */
     .ui{
       position: fixed;
       inset: 0;
@@ -68,7 +63,6 @@
 
     .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
 
-    /* Background base */
     .bg{
       position: fixed;
       inset: 0;
@@ -83,7 +77,6 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    /* Dollar layer */
     .bgDollars{
       position: fixed;
       inset: 0;
@@ -115,7 +108,6 @@
       user-select:none;
     }
 
-    /* Pixel UI helpers (SOLID) */
     .px-border{
       border: 4px solid var(--border);
       box-shadow:
@@ -318,7 +310,6 @@
       overflow-wrap: anywhere;
     }
 
-    /* How it works */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
@@ -367,7 +358,6 @@
 
     .hidden{ display:none !important; }
 
-    /* Rank */
     .scoreCard{
       max-width: 980px;
       margin: 0 auto;
@@ -404,11 +394,19 @@
       text-align:left;
     }
 
+    /* Pixel select wrapper + custom arrow */
+    .pxSelect{
+      position: relative;
+      display:inline-block;
+    }
+
     .select{
+      -webkit-appearance: none;
+      appearance: none;
       border: 4px solid var(--border);
-      background: rgba(0,0,0,.80);
+      background: rgba(0,0,0,.88);
       color: var(--text);
-      padding: 12px 12px;
+      padding: 12px 44px 12px 12px; /* room for arrow */
       box-shadow: 0 6px 0 rgba(0,0,0,.45);
       font-family: var(--pix);
       font-size: 10px;
@@ -416,6 +414,32 @@
       text-transform: uppercase;
       outline: none;
       cursor:pointer;
+      line-height: 1.2;
+    }
+    .select:hover{
+      background: linear-gradient(135deg, rgba(46,229,157,.18), rgba(200,255,0,.10)), rgba(0,0,0,.88);
+    }
+    .select:active{
+      transform: translateY(2px);
+      box-shadow: 0 4px 0 rgba(0,0,0,.45);
+    }
+
+    .pxSelect::after{
+      content:"";
+      position:absolute;
+      right: 12px;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      transform: translateY(-50%);
+      background:
+        linear-gradient(45deg, transparent 50%, var(--hot) 50%),
+        linear-gradient(-45deg, transparent 50%, var(--hot) 50%);
+      background-position: left bottom, right bottom;
+      background-size: 50% 50%;
+      background-repeat: no-repeat;
+      filter: drop-shadow(0 4px 0 rgba(0,0,0,.45));
+      pointer-events:none;
     }
 
     .input{
@@ -528,6 +552,17 @@
       cursor:pointer;
     }
 
+    /* Bigger board title for the cards page */
+    .boardBig{
+      font-size: 28px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      margin: 8px auto 14px;
+      text-shadow: 0 10px 0 rgba(0,0,0,.45);
+      color: var(--hot);
+      width: fit-content;
+      text-align:center;
+    }
   </style>
 </head>
 
@@ -535,7 +570,6 @@
   <div class="bg"></div>
 
   <div class="bgDollars" aria-hidden="true">
-    <!-- Field A -->
     <div class="dollarField fieldA">
       <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:120px;">$</div>
       <div class="dollar" style="top:10%; left:72%; --r:10deg; font-size:150px;">$</div>
@@ -557,7 +591,6 @@
       <div class="dollar" style="top:12%; left:6%;  --r:8deg;   font-size:110px;">$</div>
     </div>
 
-    <!-- Field B (clone) -->
     <div class="dollarField fieldB">
       <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:120px;">$</div>
       <div class="dollar" style="top:10%; left:72%; --r:10deg; font-size:150px;">$</div>
@@ -670,21 +703,22 @@
 
       <!-- COM CARDS BOARD -->
       <div class="stage px-border hidden" id="viewCards">
-        <div class="bigTitle" style="font-size:26px;">COM CARDS</div>
-        <p class="sub">TRENDING / TOP / NEWEST. MAX 100. OLDER ONES: SEARCH BY ID.</p>
+        <div class="boardBig" id="cardsBigTitle">TRENDING</div>
 
         <div class="boardHeader">
           <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            <select class="select" id="cardsSort">
-              <option value="trending">Trending</option>
-              <option value="top">Top</option>
-              <option value="newest">Newest</option>
-            </select>
+            <span class="pxSelect">
+              <select class="select" id="cardsSort">
+                <option value="trending">Trending</option>
+                <option value="top">Top</option>
+                <option value="newest">Newest</option>
+              </select>
+            </span>
             <button class="btn" id="btnRefreshCards">Refresh</button>
           </div>
 
           <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
-            <input class="input" id="searchCardId" placeholder="SEARCH BY CARD ID (e.g. CC_...)" />
+            <input class="input" id="searchCardId" placeholder="SEARCH CARD ID (CC_...)" />
             <button class="btn" id="btnSearchCard">Search</button>
           </div>
         </div>
@@ -693,7 +727,7 @@
         <div class="grid" id="cardsGrid"></div>
       </div>
 
-      <!-- WALLET PROFILE (from clicking wallet id) -->
+      <!-- WALLET PROFILE -->
       <div class="stage px-border hidden" id="viewWallet">
         <div class="bigTitle" style="font-size:24px;">WALLET CARDS</div>
         <p class="sub" id="walletPageSub">—</p>
@@ -719,21 +753,14 @@
   <div class="scrollSpace"></div>
 
   <script>
-    // Infinite scroll loop + background direction
     const root = document.documentElement;
-
-    function fieldLoopPx() {
-      return window.innerHeight * 2.2; // 220vh
-    }
-
-    // keep current direction (negative = reversed)
+    function fieldLoopPx() { return window.innerHeight * 2.2; }
     function setBgFromScroll(y) {
       const loopPx = fieldLoopPx();
       const raw = -y * 0.6;
       const wrapped = ((raw % loopPx) + loopPx) % loopPx;
       root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }
-
     function ensureInfiniteScroll() {
       const maxY = document.documentElement.scrollHeight - window.innerHeight;
       const y = window.scrollY || 0;
@@ -744,14 +771,12 @@
 
       setBgFromScroll(window.scrollY || 0);
     }
-
     function initLoop() {
       const maxY = document.documentElement.scrollHeight - window.innerHeight;
       const middle = Math.max(0, Math.floor(maxY / 2));
       window.scrollTo(0, middle);
       setBgFromScroll(middle);
     }
-
     let ticking = false;
     window.addEventListener("scroll", () => {
       if (ticking) return;
@@ -761,11 +786,7 @@
         ticking = false;
       });
     }, { passive: true });
-
-    window.addEventListener("resize", () => {
-      setBgFromScroll(window.scrollY || 0);
-    });
-
+    window.addEventListener("resize", () => { setBgFromScroll(window.scrollY || 0); });
     initLoop();
   </script>
 </body>

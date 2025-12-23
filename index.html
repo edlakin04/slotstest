@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- IMPORTANT: forces the site to look the same on phone (just scaled down),
+       NOT reflowed / squeezed into a mobile layout -->
+  <meta name="viewport" content="width=1050, initial-scale=1" />
+
   <title>COM COIN — Start Shilling Today</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,7 +18,7 @@
       --bg0:#04160B;
       --bg1:#062011;
 
-      /* UI is solid (not see-through) */
+      /* UI solid (not see-through) */
       --uiSolid: rgba(0,0,0,.92);
       --panelSolid: rgba(0,0,0,.92);
 
@@ -40,14 +44,19 @@
       color:var(--text);
       font-family: var(--pix);
       image-rendering: pixelated;
+
+      /* keep the same layout everywhere */
+      min-width: 1050px;
+
       overflow-x:hidden;
       overflow-y:auto;
       background: linear-gradient(180deg, var(--bg0), var(--bg1));
     }
 
-    /* Scroll driver: gives you lots of scroll distance */
+    /* This is ONLY to give scroll distance.
+       We will "loop" the scroll position with JS so it never ends. */
     .scrollSpace{
-      height: 900vh;
+      height: 500vh;
       pointer-events:none;
       opacity:0;
     }
@@ -105,8 +114,8 @@
       font-family: var(--pix);
       color: #00FF57;              /* solid bright green */
       text-shadow:
-        0 10px 0 rgba(0,0,0,.40),
-        0 0 28px rgba(0,255,87,.22);
+        0 12px 0 rgba(0,0,0,.45),
+        0 0 34px rgba(0,255,87,.22);
       opacity: 1;
       transform: rotate(var(--r));
       user-select:none;
@@ -205,7 +214,7 @@
       text-align: center;
       display:block;
 
-      font-size: clamp(18px, 3vw, 32px);
+      font-size: 30px;
       letter-spacing: .18em;
       text-transform: uppercase;
       line-height: 1.2;
@@ -242,7 +251,6 @@
       margin: 0 auto 14px;
       text-align:left;
     }
-    @media (max-width: 950px){ .stats{ grid-template-columns: 1fr; } }
 
     .stat{ padding: 14px 12px; min-width:0; }
     .k{
@@ -382,7 +390,7 @@
     }
     .rankBig{
       text-align:center;
-      font-size: clamp(18px, 3.2vw, 34px);
+      font-size: 34px;
       letter-spacing:.18em;
       text-transform: uppercase;
       margin: 2px 0 14px;
@@ -403,44 +411,50 @@
 <body>
   <div class="bg"></div>
 
-  <!-- Endless $ scroll: two identical blocks; we wrap the translate into [0, fieldHeightPx) -->
+  <!-- Endless $ scroll background -->
   <div class="bgDollars" aria-hidden="true">
+    <!-- Field A -->
     <div class="dollarField fieldA">
-      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:90px;">$</div>
-      <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
-      <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
-      <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
-      <div class="dollar" style="top:32%; left:84%; --r:-8deg; font-size:100px;">$</div>
-      <div class="dollar" style="top:40%; left:56%; --r:2deg;  font-size:130px;">$</div>
-      <div class="dollar" style="top:48%; left:8%;  --r:-4deg; font-size:105px;">$</div>
-      <div class="dollar" style="top:54%; left:36%; --r:7deg;  font-size:115px;">$</div>
-      <div class="dollar" style="top:62%; left:78%; --r:-3deg; font-size:95px;">$</div>
-      <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
-      <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
-      <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
-      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
-      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
-      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
-      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:78px;">$</div>
+      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:120px;">$</div>
+      <div class="dollar" style="top:10%; left:72%; --r:10deg; font-size:150px;">$</div>
+      <div class="dollar" style="top:16%; left:42%; --r:-2deg; font-size:130px;">$</div>
+      <div class="dollar" style="top:24%; left:18%; --r:6deg;  font-size:170px;">$</div>
+      <div class="dollar" style="top:30%; left:84%; --r:-8deg; font-size:140px;">$</div>
+      <div class="dollar" style="top:38%; left:56%; --r:2deg;  font-size:185px;">$</div>
+      <div class="dollar" style="top:46%; left:8%;  --r:-4deg; font-size:155px;">$</div>
+      <div class="dollar" style="top:52%; left:36%; --r:7deg;  font-size:165px;">$</div>
+      <div class="dollar" style="top:60%; left:78%; --r:-3deg; font-size:145px;">$</div>
+      <div class="dollar" style="top:68%; left:24%; --r:5deg;  font-size:180px;">$</div>
+      <div class="dollar" style="top:76%; left:64%; --r:-7deg; font-size:155px;">$</div>
+      <div class="dollar" style="top:84%; left:90%; --r:3deg;  font-size:175px;">$</div>
+      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:120px;">$</div>
+      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:125px;">$</div>
+      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:132px;">$</div>
+      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:118px;">$</div>
+      <div class="dollar" style="top:88%; left:42%; --r:-2deg;  font-size:140px;">$</div>
+      <div class="dollar" style="top:12%; left:6%;  --r:8deg;   font-size:110px;">$</div>
     </div>
 
+    <!-- Field B (clone) -->
     <div class="dollarField fieldB">
-      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:90px;">$</div>
-      <div class="dollar" style="top:12%; left:72%; --r:10deg; font-size:110px;">$</div>
-      <div class="dollar" style="top:18%; left:42%; --r:-2deg; font-size:95px;">$</div>
-      <div class="dollar" style="top:26%; left:18%; --r:6deg;  font-size:120px;">$</div>
-      <div class="dollar" style="top:32%; left:84%; --r:-8deg; font-size:100px;">$</div>
-      <div class="dollar" style="top:40%; left:56%; --r:2deg;  font-size:130px;">$</div>
-      <div class="dollar" style="top:48%; left:8%;  --r:-4deg; font-size:105px;">$</div>
-      <div class="dollar" style="top:54%; left:36%; --r:7deg;  font-size:115px;">$</div>
-      <div class="dollar" style="top:62%; left:78%; --r:-3deg; font-size:95px;">$</div>
-      <div class="dollar" style="top:70%; left:24%; --r:5deg;  font-size:125px;">$</div>
-      <div class="dollar" style="top:78%; left:64%; --r:-7deg; font-size:105px;">$</div>
-      <div class="dollar" style="top:86%; left:90%; --r:3deg;  font-size:120px;">$</div>
-      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:80px;">$</div>
-      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:82px;">$</div>
-      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:86px;">$</div>
-      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:78px;">$</div>
+      <div class="dollar" style="top:6%;  left:10%; --r:-6deg; font-size:120px;">$</div>
+      <div class="dollar" style="top:10%; left:72%; --r:10deg; font-size:150px;">$</div>
+      <div class="dollar" style="top:16%; left:42%; --r:-2deg; font-size:130px;">$</div>
+      <div class="dollar" style="top:24%; left:18%; --r:6deg;  font-size:170px;">$</div>
+      <div class="dollar" style="top:30%; left:84%; --r:-8deg; font-size:140px;">$</div>
+      <div class="dollar" style="top:38%; left:56%; --r:2deg;  font-size:185px;">$</div>
+      <div class="dollar" style="top:46%; left:8%;  --r:-4deg; font-size:155px;">$</div>
+      <div class="dollar" style="top:52%; left:36%; --r:7deg;  font-size:165px;">$</div>
+      <div class="dollar" style="top:60%; left:78%; --r:-3deg; font-size:145px;">$</div>
+      <div class="dollar" style="top:68%; left:24%; --r:5deg;  font-size:180px;">$</div>
+      <div class="dollar" style="top:76%; left:64%; --r:-7deg; font-size:155px;">$</div>
+      <div class="dollar" style="top:84%; left:90%; --r:3deg;  font-size:175px;">$</div>
+      <div class="dollar" style="top:22%; left:92%; --r:-10deg; font-size:120px;">$</div>
+      <div class="dollar" style="top:44%; left:4%;  --r:10deg;  font-size:125px;">$</div>
+      <div class="dollar" style="top:74%; left:50%; --r:-6deg;  font-size:132px;">$</div>
+      <div class="dollar" style="top:90%; left:14%; --r:6deg;   font-size:118px;">$</div>
+      <div class="dollar" style="top:88%; left:42%; --r:-2deg;  font-size:140px;">$</div>
+      <div class="dollar" style="top:12%; left:6%;  --r:8deg;   font-size:110px;">$</div>
     </div>
   </div>
 
@@ -541,28 +555,69 @@
   <div class="scrollSpace"></div>
 
   <script>
-    // FIXED DIRECTION + TRUE LOOP:
-    // When you scroll DOWN, dollars should move DOWN (same direction), but slower (parallax).
-    // Wrap into [0, loopPx) so it never stops.
+    /**
+     * TRUE INFINITE SCROLL LOOP:
+     * - We keep the page scroll position bouncing inside a middle band.
+     * - When you get near the top or bottom, we jump you back into the middle
+     *   WITHOUT changing what you see (background is wrapped).
+     *
+     * Works on desktop + mobile.
+     */
     const root = document.documentElement;
-    function onScroll() {
-      const y = window.scrollY || 0;
 
-      // field height in px (220vh)
-      const loopPx = window.innerHeight * 2.2;
+    function fieldLoopPx() {
+      // 220vh in px, must match .dollarField height
+      return window.innerHeight * 2.2;
+    }
 
-      // move SAME direction as scroll, but slower:
-      const raw = (y * 0.6);
-
-      // wrap raw into [0, loopPx)
+    function setBgFromScroll(y) {
+      // Background moves same direction as scroll but slower, and wraps forever.
+      const loopPx = fieldLoopPx();
+      const raw = y * 0.6;
       const wrapped = ((raw % loopPx) + loopPx) % loopPx;
-
-      // translate DOWN by wrapped pixels
       root.style.setProperty("--bgShiftY", `${wrapped}px`);
     }
 
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
+    function ensureInfiniteScroll() {
+      // total scroll height band for looping
+      const maxY = document.documentElement.scrollHeight - window.innerHeight;
+      const y = window.scrollY || 0;
+
+      // keep user in a "safe zone"
+      const margin = 400; // px
+      if (y < margin) {
+        window.scrollTo(0, y + (maxY - 2*margin));
+      } else if (y > maxY - margin) {
+        window.scrollTo(0, y - (maxY - 2*margin));
+      }
+
+      setBgFromScroll(window.scrollY || 0);
+    }
+
+    // Start in the middle so you can scroll both ways forever
+    function initLoop() {
+      const maxY = document.documentElement.scrollHeight - window.innerHeight;
+      const middle = Math.max(0, Math.floor(maxY / 2));
+      window.scrollTo(0, middle);
+      setBgFromScroll(middle);
+    }
+
+    let ticking = false;
+    window.addEventListener("scroll", () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ensureInfiniteScroll();
+        ticking = false;
+      });
+    }, { passive: true });
+
+    window.addEventListener("resize", () => {
+      // keep it stable on rotate/resizes
+      setBgFromScroll(window.scrollY || 0);
+    });
+
+    initLoop();
   </script>
 </body>
 </html>

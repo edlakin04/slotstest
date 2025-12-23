@@ -1,7 +1,9 @@
-import { j, sql } from "./_lib.js";
+import { j, sql, requireEnv } from "./_lib.js";
 
 export default async function handler(req, res) {
   try {
+    requireEnv("NEON_DATABASE_URL");
+
     const url = new URL(req.url, `http://${req.headers.host}`);
     const wallet = url.searchParams.get("wallet");
     if (!wallet) return j(res, 400, { error: "Missing wallet" });

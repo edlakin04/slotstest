@@ -16,21 +16,27 @@ const outImg = document.getElementById("outImg");
 const shillText = document.getElementById("shillText");
 
 let publicKeyBase58 = null;
-let lastImageB64 = null;
+let lastImageSrc = null;
 
 const RANKS = [
   { name: "Dust", min: 0 },
   { name: "Hodler", min: 1 },
-  { name: "Shiller", min: 1000 },
-  { name: "Chad", min: 10000 },
-  { name: "Whale", min: 100000 },
+  { name: "Shiller", min: 1_000 },
+  { name: "Chad", min: 10_000 },
+  { name: "Whale", min: 100_000 },
 ];
 
 function getRank(amount) {
   return [...RANKS].reverse().find(r => amount >= r.min) ?? RANKS[0];
 }
 
-function setMsg(s) { elMsg.textContent = s || ""; }
+function setMsg(text, kind = "muted") {
+  if (!elMsg) return;
+  elMsg.classList.remove("ok", "bad");
+  if (kind === "ok") elMsg.classList.add("ok");
+  if (kind === "bad") elMsg.classList.add("bad");
+  elMsg.textContent = text || "";
+}
 
 function requirePhantom() {
   const provider = window?.solana;
@@ -41,12 +47,12 @@ function requirePhantom() {
 async function refreshBalance() {
   if (!publicKeyBase58) return;
 
-  setMsg("Checking Com Coin balance…");
+  setMsg("Checking COM COIN balance…");
   const res = await fetch(`/api/balance?pubkey=${encodeURIComponent(publicKeyBase58)}`);
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    setMsg(data?.error || "Balance check failed.");
+    setMsg(data?.error || "Balance check failed.", "bad");
     elBalance.textContent = "—";
     elRank.textContent = "—";
     btnGenerate.disabled = true;
@@ -57,12 +63,16 @@ async function refreshBalance() {
   elBalance.textContent = amt.toLocaleString("en-GB");
   elRank.textContent = getRank(amt).name;
 
-  // Gate: must hold > 0
-  btnGenerate.disabled = !(amt > 0);
-  setMsg(amt > 0 ? "Eligible. You can generate your daily pull." : "Buy Com Coin to unlock daily generation.");
+  const eligible = amt > 0;
+  btnGenerate.disabled = !eligible;
+
+  setMsg(
+    eligible ? "Eligible. Pull your daily pixel meme." : "Not eligible yet. Hold COM COIN to unlock daily generation.",
+    eligible ? "ok" : "muted"
+  );
 }
 
-btnConnect.onclick = async () => {
+btnConnect?.addEventListener("click", async () => {
   try {
     const provider = requirePhantom();
     const resp = await provider.connect();
@@ -74,29 +84,35 @@ btnConnect.onclick = async () => {
 
     await refreshBalance();
   } catch (e) {
-    setMsg(e?.message || String(e));
+    setMsg(e?.message || String(e), "bad");
   }
-};
+});
 
-btnDisconnect.onclick = async () => {
+btnDisconnect?.addEventListener("click", async () => {
   try {
     const provider = requirePhantom();
     await provider.disconnect();
   } catch {}
+
   publicKeyBase58 = null;
   elWallet.textContent = "Not connected";
   elBalance.textContent = "—";
   elRank.textContent = "—";
+
   btnConnect.disabled = false;
   btnDisconnect.disabled = true;
   btnGenerate.disabled = true;
   btnCopyTweet.disabled = true;
   btnDownload.disabled = true;
-  outCard.style.display = "none";
-  setMsg("");
-};
 
-btnGenerate.onclick = async () => {
+  outCard.style.display = "none";
+  outImg.removeAttribute("src");
+  lastImageSrc = null;
+
+  setMsg("");
+});
+
+btnGenerate?.addEventListener("click", async () => {
   try {
     if (!publicKeyBase58) throw new Error("Connect Phantom first.");
 
@@ -106,64 +122,60 @@ btnGenerate.onclick = async () => {
     setMsg("Signing message…");
 
     const provider = requirePhantom();
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const message = `Com Coin daily meme | ${today} | I own this wallet`;
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    const message = `COM COIN daily meme | ${today} | I own this wallet`;
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
     const signatureB58 = bs58.encode(signed.signature);
 
-    setMsg("Generating image (can take a bit)…");
+    setMsg("Generating image… (this can take a bit)");
 
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pubkey: publicKeyBase58,
-        message,
-        signature: signatureB58,
-      }),
+      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature: signatureB58 })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || "Generate failed.");
 
-    lastImageB64 = data.image_b64;
     const mime = data.mime || "image/png";
-    outImg.src = `data:${mime};base64,${lastImageB64}`;
+    lastImageSrc = `data:${mime};base64,${data.image_b64}`;
+    outImg.src = lastImageSrc;
 
     const lines = [
-      "Your Com Coin daily pull is ready.",
-      "Post it on Twitter with #ComCoin",
-      "start shilling 🫡",
+      "Post it on Twitter with #ComCoin.",
+      "Start shilling 🫡",
+      "(Bonus points if you pin it.)"
     ];
-    shillText.textContent = lines.join(" ");
+    if (shillText) shillText.textContent = lines.join(" ");
 
     outCard.style.display = "block";
-    setMsg("Done. Go farm the timeline.");
+    setMsg(`Done. You pulled: ${data.type}. Go farm the timeline.`, "ok");
 
     btnCopyTweet.disabled = false;
     btnDownload.disabled = false;
+
   } catch (e) {
-    setMsg(e?.message || String(e));
+    setMsg(e?.message || String(e), "bad");
   } finally {
-    // Re-enable only if they still qualify
     await refreshBalance();
   }
-};
+});
 
-btnCopyTweet.onclick = async () => {
-  const text = `My Com Coin daily pull is in. #ComCoin start shilling 🫡`;
+btnCopyTweet?.addEventListener("click", async () => {
+  const text = `My COM COIN daily pull is in. #ComCoin start shilling 🫡`;
   await navigator.clipboard.writeText(text);
-  setMsg("Tweet text copied.");
-};
+  setMsg("Tweet text copied.", "ok");
+});
 
-btnDownload.onclick = async () => {
-  if (!lastImageB64) return;
+btnDownload?.addEventListener("click", async () => {
+  if (!lastImageSrc) return;
   const a = document.createElement("a");
-  a.href = outImg.src;
+  a.href = lastImageSrc;
   a.download = `comcoin-${Date.now()}.png`;
   document.body.appendChild(a);
   a.click();
   a.remove();
-};
+});

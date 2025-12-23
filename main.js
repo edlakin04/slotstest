@@ -37,6 +37,8 @@ const cardsGrid = document.getElementById("cardsGrid");
 const searchCardId = document.getElementById("searchCardId");
 const btnSearchCard = document.getElementById("btnSearchCard");
 
+const cardsBigTitle = document.getElementById("cardsBigTitle");
+
 const walletPageSub = document.getElementById("walletPageSub");
 const walletRankBig = document.getElementById("walletRankBig");
 const walletRankCallout = document.getElementById("walletRankCallout");
@@ -73,6 +75,12 @@ function setCardsMsg(text = "", kind = "") {
   cardsMsg.textContent = text;
 }
 
+function setCardsBigTitle(sort) {
+  if (!cardsBigTitle) return;
+  const s = (sort || "trending").toUpperCase();
+  cardsBigTitle.textContent = s;
+}
+
 function showView(which) {
   const gen = which === "gen";
   const rank = which === "rank";
@@ -96,7 +104,9 @@ tabRank && (tabRank.onclick = async () => {
 });
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
-  await loadBoard(cardsSort?.value || "trending");
+  const sort = cardsSort?.value || "trending";
+  setCardsBigTitle(sort);
+  await loadBoard(sort);
 });
 
 function isMobile() {
@@ -230,7 +240,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
         : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
   }
 
-  const eligible = amt >= 0; // set >=0 for testing if you want
+  const eligible = amt > 0; // set >=0 for testing if you want
   if (btnGenerate) btnGenerate.disabled = !eligible;
 
   if (!quiet) {
@@ -275,9 +285,6 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     if (!res.ok) throw new Error(data?.error || rawText || `HTTP ${res.status}`);
 
-    // For PRIVATE bucket mode we expect:
-    // { imageUrl: SIGNED_URL, cardId, name, imagePath }
-    // (still supports old b64 fallback)
     const urlFromApi = data?.imageUrl || data?.image_url || null;
 
     let imgSrc = null;
@@ -321,7 +328,9 @@ btnGenerate && (btnGenerate.onclick = async () => {
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
     if (!viewCards?.classList.contains("hidden")) {
-      await loadBoard(cardsSort?.value || "trending");
+      const sort = cardsSort?.value || "trending";
+      setCardsBigTitle(sort);
+      await loadBoard(sort);
     }
     if (!viewRank?.classList.contains("hidden")) {
       await loadRankCards();
@@ -353,11 +362,15 @@ btnDownload && (btnDownload.onclick = () => {
 /* ---------------- COM CARDS BOARD ---------------- */
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
-  await loadBoard(cardsSort?.value || "trending");
+  const sort = cardsSort?.value || "trending";
+  setCardsBigTitle(sort);
+  await loadBoard(sort);
 });
 
 cardsSort && (cardsSort.onchange = async () => {
-  await loadBoard(cardsSort.value || "trending");
+  const sort = cardsSort.value || "trending";
+  setCardsBigTitle(sort);
+  await loadBoard(sort);
 });
 
 btnSearchCard && (btnSearchCard.onclick = async () => {
@@ -368,7 +381,9 @@ btnSearchCard && (btnSearchCard.onclick = async () => {
 
 btnBackToCards && (btnBackToCards.onclick = async () => {
   showView("cards");
-  await loadBoard(cardsSort?.value || "trending");
+  const sort = cardsSort?.value || "trending";
+  setCardsBigTitle(sort);
+  await loadBoard(sort);
 });
 
 async function loadBoard(sort) {
@@ -389,7 +404,7 @@ async function loadBoard(sort) {
       return;
     }
 
-    setCardsMsg(`SHOWING ${items.length} • ${sort.toUpperCase()}`, "ok");
+    setCardsMsg(`SHOWING ${items.length}`, "ok");
     renderCards(cardsGrid, items, { showWalletLink: true });
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
@@ -429,7 +444,6 @@ function renderCards(container, items, opts = {}) {
     const img = document.createElement("img");
     img.className = "cardImg";
     img.alt = it.name || "COM CARD";
-    // ✅ PRIVATE mode: backend returns signed URL as imageUrl
     img.src = it.imageUrl || it.image_url || "";
     card.appendChild(img);
 
@@ -610,11 +624,12 @@ async function loadRankCards() {
     for (const it of items.slice(0, 24)) {
       const img = document.createElement("img");
       img.className = "miniThumb";
-      // ✅ PRIVATE mode: prefer signed url
       img.src = it.imageUrl || it.image_url || "";
       img.alt = it.name || "COM CARD";
       img.onclick = async () => {
         showView("cards");
+        const sort = cardsSort?.value || "trending";
+        setCardsBigTitle(sort);
         if (searchCardId) searchCardId.value = it.id;
         await searchById(it.id);
       };

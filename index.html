@@ -32,14 +32,24 @@
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
 
+    /* Make page scroll naturally */
     body{
       margin:0;
       color:var(--text);
       font-family: var(--pix);
       image-rendering: pixelated;
       overflow-x:hidden;
+      overflow-y:auto;
+      background:
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
 
-      /* crisp pixel green background */
+    /* Big scrolling background layer */
+    .bg{
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events:none;
       background:
         linear-gradient(90deg, rgba(0,0,0,.14) 1px, transparent 1px),
         linear-gradient(rgba(0,0,0,.14) 1px, transparent 1px),
@@ -49,7 +59,47 @@
       background-size: 14px 14px, 14px 14px, auto, auto, auto;
     }
 
-    .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 70px; }
+    /* Scrolling $ pattern that feels endless */
+    .bgDollars{
+      position: fixed;
+      inset: -200vh 0 -200vh 0; /* huge height so it still covers when you scroll */
+      z-index: -1;
+      pointer-events:none;
+      opacity: .22;
+      filter: drop-shadow(0 6px 0 rgba(0,0,0,.25));
+      background-image:
+        repeating-linear-gradient(
+          180deg,
+          rgba(46,229,157,.0) 0px,
+          rgba(46,229,157,.0) 60px,
+          rgba(46,229,157,.10) 60px,
+          rgba(46,229,157,.10) 62px
+        );
+    }
+
+    /* Pixel $ signs using CSS (no images) */
+    .bgDollars::before{
+      content: "$  $   $    $  $   $    $   $  $   $    $  $   $    $   $  $   $";
+      position:absolute;
+      inset: 0;
+      font-family: var(--pix);
+      font-size: 26px;
+      letter-spacing: 26px;
+      line-height: 80px;
+      white-space: pre-wrap;
+      color: rgba(46,229,157,.55);
+      text-shadow:
+        0 6px 0 rgba(0,0,0,.28),
+        0 0 22px rgba(46,229,157,.10);
+      transform: translateY(var(--dollarY, 0px)) rotate(-2deg);
+    }
+
+    /* Make the dollar field “move” a bit as you scroll */
+    body{
+      --dollarY: 0px;
+    }
+
+    .wrap{ max-width:1050px; margin:0 auto; padding:18px 16px 90px; }
 
     /* Pixel UI helpers */
     .px-border{
@@ -128,7 +178,6 @@
     }
     .btn:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
     .btn:disabled{ opacity:.45; cursor:not-allowed; }
-
     .btn.primary{
       background: linear-gradient(135deg, rgba(46,229,157,.30), rgba(200,255,0,.20));
     }
@@ -170,7 +219,7 @@
       margin: 0 auto 16px;
       max-width: 920px;
       color: var(--muted);
-      line-height: 1.95;
+      line-height: 2.0;
       font-size: 11px;
       letter-spacing:.06em;
     }
@@ -198,7 +247,7 @@
       font-size: 11px;
       letter-spacing:.08em;
       min-width:0;
-      line-height: 1.5;
+      line-height: 1.6;
     }
     .walletFit{
       white-space: nowrap;
@@ -222,7 +271,9 @@
       font-size: 10px;
       letter-spacing:.08em;
       color: var(--muted);
-      line-height: 1.8;
+      line-height: 1.9;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
     .msg.ok{ color: rgba(46,229,157,.98); }
     .msg.bad{ color: rgba(255,77,109,.98); }
@@ -253,6 +304,8 @@
       font-size: 10px;
       letter-spacing:.08em;
       line-height: 1.8;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
     .chip{
       border: 4px solid var(--border2);
@@ -265,11 +318,13 @@
       color: var(--text);
     }
 
+    /* HOW IT WORKS — forced fit */
     .how{
       max-width: 980px;
       margin: 16px auto 0;
       padding: 14px 12px;
       text-align:left;
+      overflow:hidden;              /* ✅ prevents any overflow outside border */
     }
     .how h3{
       margin: 0 0 10px;
@@ -282,18 +337,20 @@
       margin:0;
       padding-left: 18px;
       color: var(--muted);
-      line-height: 2.0;
+      line-height: 1.85;            /* ✅ slightly tighter to fit */
       font-size: 10px;
-      letter-spacing:.08em;
+      letter-spacing:.06em;
 
-      /* keeps text inside border */
       word-break: break-word;
       overflow-wrap: anywhere;
+    }
+    .how li{
+      margin-bottom: 6px;           /* ✅ reduces height pressure */
     }
 
     .hidden{ display:none !important; }
 
-    /* Rank “scoreboard” */
+    /* Rank “scoreboard” — only current rank */
     .scoreCard{
       max-width: 980px;
       margin: 0 auto;
@@ -314,19 +371,16 @@
       letter-spacing:.08em;
       color: var(--muted);
       line-height: 2.0;
-    }
-    .levels{
-      margin-top: 12px;
-      font-size: 9px;
-      letter-spacing:.12em;
-      text-transform: uppercase;
-      color: rgba(233,255,241,.70);
-      line-height: 2.0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
   </style>
 </head>
 
 <body>
+  <div class="bg"></div>
+  <div class="bgDollars" id="bgDollars"></div>
+
   <div class="wrap">
 
     <!-- TOP BAR -->
@@ -335,7 +389,8 @@
         <div class="logo" aria-hidden="true"></div>
         <div style="min-width:0">
           <p class="brandName">COM COIN</p>
-          <div class="brandTag">$COMCOIN • daily pixel pull • phantom gated • 1/day</div>
+          <!-- ✅ only $COMCOIN -->
+          <div class="brandTag">$COMCOIN</div>
         </div>
       </div>
 
@@ -382,11 +437,11 @@
 
       <div class="msg" id="msg"></div>
 
-      <!-- OUTPUT (image is set into outImg by main.js) -->
+      <!-- OUTPUT -->
       <div class="outWrap px-border-soft" id="outWrap">
         <img class="outImg" id="outImg" alt="Generated meme" />
         <div class="outLine">
-          <div id="shillText">POST IT • START SHILLING 🫡 • $COMCOIN</div>
+          <div id="shillText">START SHILLING TODAY • $COMCOIN</div>
           <div class="chip" id="typeChip">TYPE: —</div>
         </div>
       </div>
@@ -406,13 +461,30 @@
       <div class="scoreCard px-border-soft">
         <div class="rankBig" id="rankBig">—</div>
         <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
-        <div class="levels">
-          LEVELS: DUST (0) • HODLER (1) • SHILLER (1K) • CHAD (10K) • WHALE (100K)
-        </div>
       </div>
     </div>
 
     <script type="module" src="/main.js"></script>
+
+    <script>
+      // Make the background dollars drift based on scroll position (simple, smooth)
+      const bg = document.getElementById("bgDollars");
+      let ticking = false;
+
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          const y = window.scrollY || 0;
+          // subtle parallax movement
+          document.body.style.setProperty("--dollarY", `${-(y * 0.35)}px`);
+          ticking = false;
+        });
+      }
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    </script>
   </div>
 </body>
 </html>

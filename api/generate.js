@@ -1,4 +1,14 @@
-import { j, readJson, requireEnv, verifyPhantomSign, makeCardId, randomMemeName, pick, sql, supabase } from "./_lib.js";
+import {
+  j,
+  readJson,
+  requireEnv,
+  verifyPhantomSign,
+  makeCardId,
+  randomMemeName,
+  pick,
+  sql,
+  supabase
+} from "./_lib.js";
 
 export default async function handler(req, res) {
   try {
@@ -30,27 +40,42 @@ export default async function handler(req, res) {
 
     const bucket = process.env.SUPABASE_BUCKET;
     const cardId = makeCardId();
-    const filename = `${pubkey}/${cardId}.png`;
+    const path = `${pubkey}/${cardId}.png`;
 
     const bytes = Buffer.from(pngB64, "base64");
+
     const { error: upErr } = await supabase.storage
       .from(bucket)
-      .upload(filename, bytes, { contentType: "image/png", upsert: true });
+      .upload(path, bytes, { contentType: "image/png", upsert: true });
 
     if (upErr) throw new Error(`Supabase upload failed: ${upErr.message}`);
 
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(filename);
-    const imageUrl = pub?.publicUrl;
-    if (!imageUrl) throw new Error("Failed to get public URL");
+    // ✅ Create signed URL (private bucket)
+    const { data: signed, error: signErr } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, 60 * 60); // 1 hour
+
+    if (signErr) throw new Error(`Signed URL failed: ${signErr.message}`);
+
+    const signedUrl = signed?.signedUrl;
+    if (!signedUrl) throw new Error("No signed URL returned");
 
     const name = randomMemeName();
 
+    // ✅ Store path (not signed URL) in DB
     await sql`
       insert into com_cards (id, owner_wallet, name, image_url)
-      values (${cardId}, ${pubkey}, ${name}, ${imageUrl})
+      values (${cardId}, ${pubkey}, ${name}, ${path})
     `;
 
-    return j(res, 200, { ok: true, cardId, name, imageUrl });
+    return j(res, 200, {
+      ok: true,
+      cardId,
+      name,
+      imageUrl: signedUrl,
+      // also return path for debugging if you want:
+      imagePath: path
+    });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });
   }
@@ -66,8 +91,7 @@ async function generateOpenAiPngBase64(apiKey, prompt) {
     body: JSON.stringify({
       model: "gpt-image-1",
       prompt,
-      size: "1024x1024",
-    
+      size: "1024x1024"
     })
   });
 

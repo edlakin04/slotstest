@@ -382,7 +382,7 @@
       overflow-wrap: anywhere;
     }
 
-    /* ===== COM CARDS BOARD ===== */
+    /* ===== COM CARDS ===== */
     .boardHeader{
       max-width: 980px;
       margin: 0 auto 12px;
@@ -477,33 +477,6 @@
       color: var(--text);
     }
 
-    .sectionTitle{
-      max-width: 980px;
-      margin: 0 auto 10px;
-      text-align:left;
-      font-size: 10px;
-      letter-spacing:.14em;
-      text-transform: uppercase;
-      color: var(--hot);
-    }
-
-    .miniGrid{
-      max-width: 980px;
-      margin: 12px auto 0;
-      display:grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 10px;
-      text-align:left;
-    }
-    .miniThumb{
-      width:100%;
-      display:block;
-      border: 4px solid var(--border2);
-      box-shadow: 0 8px 0 rgba(0,0,0,.30);
-      background: rgba(0,0,0,.35);
-      cursor:pointer;
-    }
-
     .boardBig{
       font-size: 28px;
       letter-spacing: .18em;
@@ -593,7 +566,7 @@
       box-shadow: 0 4px 0 rgba(0,0,0,.35);
     }
 
-    /* ===== NEW: mini toggle inside Com Cards page ===== */
+    /* ===== NEW: toggle inside Com Cards page ===== */
     .cardsToggle{
       max-width: 980px;
       margin: 0 auto 12px;
@@ -812,21 +785,19 @@
           <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
         </div>
 
-        <!-- kept in DOM for compatibility (we’re not using it anymore) -->
-        <div class="sectionTitle" style="margin-top:14px; display:none;">Your Com Cards</div>
-        <div class="px-border-soft" style="max-width:980px; margin:0 auto; padding:12px; display:none;">
-          <div class="msg" id="rankCardsMsg" style="margin:0 0 8px;">CONNECT TO LOAD YOUR COM CARDS.</div>
+        <!-- kept in DOM for compatibility (not used now) -->
+        <div style="display:none;">
+          <div class="msg" id="rankCardsMsg"></div>
           <div class="miniGrid" id="rankMiniGrid"></div>
         </div>
       </div>
 
-      <!-- COM CARDS (UPDATED: BOARD + MY COM CARDS) -->
+      <!-- COM CARDS (BOARD + MY COM CARDS) -->
       <div class="stage px-border hidden" id="viewCards">
-        <div class="boardBig" id="cardsBigTitle">TRENDING</div>
+        <div class="boardBig" id="cardsBigTitle">COM CARDS</div>
 
-        <!-- Toggle -->
         <div class="cardsToggle">
-          <button class="toggleBtn active" id="btnCardsBoard" type="button">BOARD</button>
+          <button class="toggleBtn active" id="btnCardsBoard" type="button">COM CARDS</button>
           <button class="toggleBtn" id="btnCardsMine" type="button">MY COM CARDS</button>
         </div>
 
@@ -881,7 +852,6 @@
           <div class="rankCallout" id="walletRankCallout">—</div>
         </div>
 
-        <div class="sectionTitle" style="margin-top:14px;">Com Cards</div>
         <div class="msg" id="walletCardsMsg"></div>
         <div class="grid" id="walletCardsGrid"></div>
 
@@ -909,50 +879,10 @@
             on-chain game where attention has weight.
           </p>
 
-          <div class="marketGrid">
-            <div class="marketBox px-border">
-              <h4>Paid mint (burn-powered)</h4>
-              <p>
-                Eventually, generating a COM CARD will cost <b>$COMCOIN</b>.
-                A slice of every mint gets <b>burned</b> so the supply trends down as usage trends up.
-              </p>
-            </div>
-
-            <div class="marketBox px-border">
-              <h4>Vote-driven pricing</h4>
-              <p>
-                A card’s price won’t be “set by the owner”. It will be shaped by <b>votes + momentum</b>.
-                The more the community pushes a card, the more the price increases.
-              </p>
-            </div>
-
-            <div class="marketBox px-border">
-              <h4>Buyouts + burn on sales</h4>
-              <p>
-                COM CARDS are designed so <b>one wallet owns a card at a time</b>.
-                When a buy happens, a percentage of the sale is routed into <b>burn</b>.
-              </p>
-            </div>
-
-            <div class="marketBox px-border">
-              <h4>Protection (anti-snipe)</h4>
-              <p>
-                Owners can pay <b>$COMCOIN</b> to add buy-protection to their card (stops other users buying while the price rises). If a card is not protected, other users can buy the card at its value.
-                That protection fee also routes a big chunk into <b>burn</b>.
-              </p>
-            </div>
-          </div>
-
-          <p class="marketP">
-            All of this is to be enforced by <b>smart contracts</b> — not “trust me bro” buttons.
-            The Market is meant to make memes tradable without turning the project into a rug machine.
-          </p>
-
           <div class="tagPill">VISION: MEMES → MARKET → BURNS → ON-CHAIN CULTURE</div>
 
           <p class="marketP" style="margin-top:14px;">
-            <b>Note:</b> This is a roadmap page (not live trading yet). Nothing here is a promise of price or returns —
-            it’s the direction: more utility, more reasons to use $COMCOIN, more reasons to keep the economy moving.
+            <b>Note:</b> This is a roadmap page (not live trading yet).
           </p>
         </div>
       </div>

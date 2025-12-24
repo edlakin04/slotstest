@@ -59,7 +59,8 @@ let lastImageSrc = null;
 // board sort state
 let currentSort = "trending";
 
-const VOTE_RULE_TEXT = "RULE: 1 VOTE PER WALLET PER CARD. YOU CAN SWITCH UP↔DOWN ONCE.";
+// ✅ UPDATED RULE
+const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)";
 
 const RANKS = [
   { name: "Dust", min: 0 },
@@ -140,7 +141,7 @@ tabRank && (tabRank.onclick = async () => {
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
   setSort(currentSort);
-  setCardsMsg(VOTE_RULE_TEXT, ""); // 👈 show rule whenever entering cards
+  setCardsMsg(VOTE_RULE_TEXT, "");
   await loadBoard(currentSort);
 });
 
@@ -444,12 +445,10 @@ btnBackToCards && (btnBackToCards.onclick = async () => {
 
 async function loadBoard(sort) {
   try {
-    // keep rule visible unless an error happens
     if (!cardsGrid) return;
 
-    if (!cardsMsg?.classList.contains("bad")) setCardsMsg(VOTE_RULE_TEXT, "");
-
-    if (cardsGrid) cardsGrid.innerHTML = "";
+    setCardsMsg(VOTE_RULE_TEXT, "");
+    cardsGrid.innerHTML = "";
 
     const res = await fetch(`/api/cards_list?sort=${encodeURIComponent(sort)}&limit=100`);
     const text = await res.text();
@@ -464,8 +463,6 @@ async function loadBoard(sort) {
       return;
     }
 
-    // small status update without killing the rule — keep it simple
-    // (rule remains in message line; count is shown via console if you want)
     renderCards(cardsGrid, items, { showWalletLink: true });
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
@@ -619,6 +616,8 @@ async function voteCard(cardId, vote, pillEl) {
     setCardsMsg(String(e.message || e), "bad");
   }
 }
+
+/* ---------- wallet page / rank cards unchanged ---------- */
 
 async function openWalletPage(wallet) {
   showView("wallet");

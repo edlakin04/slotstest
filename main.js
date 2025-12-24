@@ -8,7 +8,7 @@ const tabMarket = document.getElementById("tabMarket");
 const viewGen = document.getElementById("viewGen");
 const viewRank = document.getElementById("viewRank");
 const viewCards = document.getElementById("viewCards");
-const viewWallet = document.getElementById("viewWallet"); // still used for clicking wallet IDs (profile)
+const viewWallet = document.getElementById("viewWallet");
 const viewMarket = document.getElementById("viewMarket");
 
 const btnConnect = document.getElementById("btnConnect");
@@ -30,7 +30,7 @@ const cardMetaMini = document.getElementById("cardMetaMini");
 const rankBig = document.getElementById("rankBig");
 const rankCallout = document.getElementById("rankCallout");
 
-// ✅ Rank page no longer loads cards:
+// (kept in DOM but unused)
 const rankCardsMsg = document.getElementById("rankCardsMsg");
 const rankMiniGrid = document.getElementById("rankMiniGrid");
 
@@ -41,21 +41,12 @@ const searchCardId = document.getElementById("searchCardId");
 const btnSearchCard = document.getElementById("btnSearchCard");
 const cardsBigTitle = document.getElementById("cardsBigTitle");
 
-// dropdown
 const cardsSortDD = document.getElementById("cardsSortDD");
 const cardsSortBtn = document.getElementById("cardsSortBtn");
 const cardsSortMenu = document.getElementById("cardsSortMenu");
 const cardsSortLabel = document.getElementById("cardsSortLabel");
 
-// wallet profile page (click wallet IDs)
-const walletPageSub = document.getElementById("walletPageSub");
-const walletRankBig = document.getElementById("walletRankBig");
-const walletRankCallout = document.getElementById("walletRankCallout");
-const walletCardsMsg = document.getElementById("walletCardsMsg");
-const walletCardsGrid = document.getElementById("walletCardsGrid");
-const btnBackToCards = document.getElementById("btnBackToCards");
-
-// ✅ NEW: Com Cards page "Board / My Cards"
+// Board / My
 const btnCardsBoard = document.getElementById("btnCardsBoard");
 const btnCardsMine = document.getElementById("btnCardsMine");
 const cardsBoardWrap = document.getElementById("cardsBoardWrap");
@@ -64,18 +55,26 @@ const myCardsMsg = document.getElementById("myCardsMsg");
 const myCardsGrid = document.getElementById("myCardsGrid");
 const btnRefreshMine = document.getElementById("btnRefreshMine");
 
+// wallet profile page
+const walletPageSub = document.getElementById("walletPageSub");
+const walletRankBig = document.getElementById("walletRankBig");
+const walletRankCallout = document.getElementById("walletRankCallout");
+const walletCardsMsg = document.getElementById("walletCardsMsg");
+const walletCardsGrid = document.getElementById("walletCardsGrid");
+const btnBackToCards = document.getElementById("btnBackToCards");
+
 let publicKeyBase58 = null;
 let lastImageSrc = null;
 
 let currentSort = "trending";
 
-// vote rule
-const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)";
-
-// caches (session)
-const CACHE_TTL_MS = 30_000;
-const boardCache = new Map();      // sort -> { items, ts }
+// cache
+const CACHE_TTL_MS = 45_000;
+const boardCache = new Map();       // sort -> { items, ts }
 const walletCardsCache = new Map(); // wallet -> { items, ts }
+const inflight = new Map();         // key -> Promise
+
+const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)";
 
 const RANKS = [
   { name: "Dust", min: 0 },
@@ -115,21 +114,20 @@ function setMyCardsMsg(text = "", kind = "") {
   myCardsMsg.textContent = text;
 }
 
+function setCardsBigTitleText(t) {
+  if (!cardsBigTitle) return;
+  cardsBigTitle.textContent = String(t || "").toUpperCase();
+}
+
 function getSortLabel(v){
   if (v === "top") return "TOP";
   if (v === "newest") return "NEWEST";
   return "TRENDING";
 }
 
-function setCardsBigTitle(title) {
-  if (!cardsBigTitle) return;
-  cardsBigTitle.textContent = (title || "TRENDING").toUpperCase();
-}
-
 function setSort(v){
   currentSort = v || "trending";
   if (cardsSortLabel) cardsSortLabel.textContent = getSortLabel(currentSort);
-  setCardsBigTitle(getSortLabel(currentSort));
 }
 
 function toggleSortMenu(force){
@@ -171,7 +169,6 @@ function setConnectedUI(connected) {
 function getRank(amount) {
   return [...RANKS].reverse().find(r => amount >= r.min) || RANKS[0];
 }
-
 function nextRank(amount) {
   return RANKS.find(r => r.min > amount) || null;
 }
@@ -242,13 +239,13 @@ tabGen && (tabGen.onclick = () => showView("gen"));
 
 tabRank && (tabRank.onclick = async () => {
   showView("rank");
-  // rank page no longer fetches cards
 });
 
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
-  setSort(currentSort);
   openCardsSection("board");
+  // prefetch my cards in background so switching is instant
+  prefetchMyCards();
   await showBoardFromCacheOrLoad();
 });
 
@@ -268,8 +265,11 @@ cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
   setSort(val);
   toggleSortMenu(false);
 
+  // Title stays COM CARDS (not TRENDING/TOP/NEWEST)
+  setCardsBigTitleText("COM CARDS");
+
   openCardsSection("board");
-  await showBoardFromCacheOrLoad();
+  await showBoardFromCacheOrLoad({ forceNetwork: true });
 });
 
 document.addEventListener("click", (e) => {
@@ -277,7 +277,7 @@ document.addEventListener("click", (e) => {
   if (!cardsSortDD.contains(e.target)) toggleSortMenu(false);
 });
 
-/* ---------------- Cards page sub-tabs (Board / My Cards) ---------------- */
+/* ---------------- Cards section toggle ---------------- */
 
 function openCardsSection(which) {
   const isBoard = which === "board";
@@ -287,12 +287,18 @@ function openCardsSection(which) {
   btnCardsBoard?.classList.toggle("active", isBoard);
   btnCardsMine?.classList.toggle("active", !isBoard);
 
-  // message bar
-  if (isBoard) setCardsMsg(VOTE_RULE_TEXT, "");
+  if (isBoard) {
+    setCardsBigTitleText("COM CARDS");
+    setCardsMsg(VOTE_RULE_TEXT, "");
+  } else {
+    setCardsBigTitleText("MY COM CARDS");
+  }
 }
 
 btnCardsBoard && (btnCardsBoard.onclick = async () => {
   openCardsSection("board");
+  // prefetch mine in background again
+  prefetchMyCards();
   await showBoardFromCacheOrLoad();
 });
 
@@ -306,20 +312,20 @@ btnRefreshMine && (btnRefreshMine.onclick = async () => {
   await showMyCardsFromCacheOrLoad({ forceNetwork: true });
 });
 
-/* ---------------- wallet connect ---------------- */
+/* ---------------- connect ---------------- */
 
 async function connectPhantom(opts) {
   const provider = requirePhantomOrDeepLink();
   const resp = await provider.connect(opts);
   publicKeyBase58 = resp.publicKey.toBase58();
+
   if (elWallet) elWallet.textContent = publicKeyBase58;
+
   setConnectedUI(true);
   await refreshBalanceAndRank();
 
-  // if user is on "My Cards" section, warm it
-  if (!viewCards?.classList.contains("hidden") && !cardsMineWrap?.classList.contains("hidden")) {
-    await showMyCardsFromCacheOrLoad();
-  }
+  // ✅ IMPORTANT: prefetch my cards in background right after connect
+  prefetchMyCards();
 }
 
 btnConnect && (btnConnect.onclick = async () => {
@@ -342,18 +348,18 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   lastImageSrc = null;
   if (cardMetaMini) cardMetaMini.style.display = "none";
 
-  // clear wallet caches only
   walletCardsCache.clear();
+  inflight.clear();
 
-  // rank page cards removed
   if (rankCardsMsg) rankCardsMsg.textContent = "";
   if (rankMiniGrid) rankMiniGrid.innerHTML = "";
+
+  if (myCardsGrid) myCardsGrid.innerHTML = "";
+  setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");
 
   setConnectedUI(false);
   setMsg("");
   setCardsMsg(VOTE_RULE_TEXT, "");
-  setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");
-  if (myCardsGrid) myCardsGrid.innerHTML = "";
 });
 
 /* ---------------- balance & rank ---------------- */
@@ -389,7 +395,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
         : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
   }
 
-  // your existing gate (change to >=0 for testing)
+  // gate (set to >=0 for testing if you want)
   const eligible = amt >= 0;
   if (btnGenerate) btnGenerate.disabled = !eligible;
 
@@ -399,10 +405,6 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
       eligible ? "ok" : ""
     );
   }
-
-  // Rank page: stop showing card stuff (optional text)
-  if (rankCardsMsg) rankCardsMsg.textContent = "";
-  if (rankMiniGrid) rankMiniGrid.innerHTML = "";
 }
 
 /* ---------------- generate ---------------- */
@@ -465,8 +467,8 @@ btnGenerate && (btnGenerate.onclick = async () => {
     if (cardMetaMini) {
       if (data?.cardId || data?.name) {
         const parts = [];
-        if (data?.name) parts.push(data.name.toString().toUpperCase());
-        if (data?.cardId) parts.push(data.cardId.toString().toUpperCase());
+        if (data?.name) parts.push(String(data.name).toUpperCase());
+        if (data?.cardId) parts.push(String(data.cardId).toUpperCase());
         cardMetaMini.textContent = parts.join(" • ");
         cardMetaMini.style.display = "inline-block";
       } else {
@@ -479,10 +481,11 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
-    // Invalidate only your own cards cache (so My Cards refreshes)
+    // invalidate my cards cache and prefetch again
     if (publicKeyBase58) walletCardsCache.delete(publicKeyBase58);
+    prefetchMyCards();
 
-    // refresh My Cards if user is currently there
+    // if user is currently viewing MY COM CARDS, refresh it
     if (!viewCards?.classList.contains("hidden") && !cardsMineWrap?.classList.contains("hidden")) {
       await showMyCardsFromCacheOrLoad({ forceNetwork: true });
     }
@@ -493,7 +496,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
   }
 });
 
-/* ---------------- extras ---------------- */
+/* ---------------- generator extras ---------------- */
 
 btnCopyTweet && (btnCopyTweet.onclick = async () => {
   await navigator.clipboard.writeText("MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡");
@@ -510,11 +513,12 @@ btnDownload && (btnDownload.onclick = () => {
   a.remove();
 });
 
-/* ---------------- COM CARDS BOARD (fast cache + single loading message) ---------------- */
+/* ---------------- COM CARDS BOARD ---------------- */
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
   boardCache.delete(currentSort);
   openCardsSection("board");
+  prefetchMyCards();
   await showBoardFromCacheOrLoad({ forceNetwork: true });
 });
 
@@ -522,13 +526,13 @@ btnSearchCard && (btnSearchCard.onclick = async () => {
   const id = (searchCardId?.value || "").trim();
   if (!id) return setCardsMsg("ENTER A CARD ID.", "bad");
   openCardsSection("board");
+  prefetchMyCards();
   await searchById(id);
 });
 
 async function showBoardFromCacheOrLoad({ forceNetwork = false } = {}) {
   const cached = boardCache.get(currentSort);
 
-  // instant if cached
   if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
     setCardsMsg(VOTE_RULE_TEXT, "");
     renderCards(cardsGrid, cached.items, { showWalletLink: true });
@@ -560,13 +564,10 @@ async function loadBoard(sort) {
       return;
     }
 
-    // ✅ Render immediately (images can load progressively)
     renderCards(cardsGrid, items, { showWalletLink: true });
 
-    // ✅ Keep "LOADING..." until ALL images in the grid are loaded
     await waitForImagesIn(cardsGrid);
 
-    // Only swap message if still on board view
     if (!viewCards?.classList.contains("hidden") && !cardsBoardWrap?.classList.contains("hidden")) {
       setCardsMsg(VOTE_RULE_TEXT, "");
     }
@@ -598,7 +599,37 @@ async function searchById(cardId) {
   }
 }
 
-/* ---------------- MY COM CARDS (in Com Cards page) ---------------- */
+/* ---------------- MY COM CARDS (prefetch + faster feel) ---------------- */
+
+function inflightKeyMy(wallet){ return `my:${wallet}`; }
+
+function prefetchMyCards() {
+  if (!publicKeyBase58) return;
+  const wallet = publicKeyBase58;
+
+  const cached = walletCardsCache.get(wallet);
+  if (cacheFresh(cached) && Array.isArray(cached.items)) return;
+
+  const key = inflightKeyMy(wallet);
+  if (inflight.has(key)) return;
+
+  const p = (async () => {
+    try {
+      const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(wallet)}&limit=100`);
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch {}
+      if (!res.ok) return;
+
+      const items = data?.items || [];
+      walletCardsCache.set(wallet, { items, ts: Date.now() });
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+
+  inflight.set(key, p);
+}
 
 async function showMyCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
   if (!myCardsGrid) return;
@@ -608,6 +639,9 @@ async function showMyCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
     myCardsGrid.innerHTML = "";
     return;
   }
+
+  // Always make title correct here
+  setCardsBigTitleText("MY COM CARDS");
 
   const cached = walletCardsCache.get(publicKeyBase58);
   if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
@@ -639,10 +673,11 @@ async function loadMyCards(wallet) {
       return;
     }
 
-    // render immediately, keep message until images loaded
+    // render immediately
     renderCards(myCardsGrid, items, { showWalletLink: false });
-    await waitForImagesIn(myCardsGrid);
 
+    // wait for images then swap msg
+    await waitForImagesIn(myCardsGrid);
     setMyCardsMsg(`MY COM CARDS: ${items.length}`, "ok");
   } catch (e) {
     setMyCardsMsg(String(e.message || e), "bad");
@@ -687,7 +722,7 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
-    // update cached current board counts
+    // update cached board counts
     const entry = boardCache.get(currentSort);
     if (entry?.items?.length) {
       for (const it of entry.items) {
@@ -757,6 +792,7 @@ function renderCards(container, items, opts = {}) {
       if (!id) return;
       showView("cards");
       openCardsSection("board");
+      setCardsBigTitleText("COM CARDS");
       if (searchCardId) searchCardId.value = id;
       await searchById(id);
     });
@@ -764,7 +800,6 @@ function renderCards(container, items, opts = {}) {
     meta.querySelector("#owner-holder")?.replaceWith(ownerSpan);
     card.appendChild(meta);
 
-    // voting row only on board (optional, but keep it everywhere)
     const voteRow = document.createElement("div");
     voteRow.className = "voteRow";
 
@@ -797,28 +832,29 @@ function renderCards(container, items, opts = {}) {
   }
 }
 
-/* ---------------- wallet profile page (click wallet IDs) ---------------- */
+/* ---------------- wallet profile page ---------------- */
 
 btnBackToCards && (btnBackToCards.onclick = async () => {
   showView("cards");
   openCardsSection("board");
+  prefetchMyCards();
   await showBoardFromCacheOrLoad();
 });
 
 async function openWalletPage(wallet) {
   showView("wallet");
-  walletPageSub.textContent = `WALLET: ${wallet}`;
-  walletCardsMsg.textContent = "LOADING COM CARDS…";
-  walletCardsGrid.innerHTML = "";
+  if (walletPageSub) walletPageSub.textContent = `WALLET: ${wallet}`;
+  if (walletCardsMsg) walletCardsMsg.textContent = "LOADING COM CARDS…";
+  if (walletCardsGrid) walletCardsGrid.innerHTML = "";
 
   const isMe = publicKeyBase58 && wallet === publicKeyBase58;
 
   if (isMe) {
-    walletRankBig.textContent = rankBig?.textContent || "—";
-    walletRankCallout.textContent = rankCallout?.textContent || "—";
+    if (walletRankBig) walletRankBig.textContent = rankBig?.textContent || "—";
+    if (walletRankCallout) walletRankCallout.textContent = rankCallout?.textContent || "—";
   } else {
-    walletRankBig.textContent = "HOLDER";
-    walletRankCallout.textContent = "THIS IS A COM CARDS PROFILE. (BALANCE RANK IS PRIVATE)";
+    if (walletRankBig) walletRankBig.textContent = "HOLDER";
+    if (walletRankCallout) walletRankCallout.textContent = "THIS IS A COM CARDS PROFILE.";
   }
 
   const cached = walletCardsCache.get(wallet);
@@ -830,7 +866,6 @@ async function openWalletPage(wallet) {
   }
 
   try {
-    walletCardsMsg.textContent = "LOADING COM CARDS…";
     const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(wallet)}&limit=100`);
     const text = await res.text();
     let data = null;
@@ -863,5 +898,6 @@ async function openWalletPage(wallet) {
 
 setSort(currentSort);
 showView("gen");
+setCardsBigTitleText("COM CARDS");
 setCardsMsg(VOTE_RULE_TEXT, "");
 setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");

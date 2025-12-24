@@ -36,16 +36,24 @@ export default async function handler(req, res) {
       await rateLimitOrThrow(`rl:vote:wallet:${pubkey}`, 60, 600);
     }
 
-    // Replay protection: same signed payload spam
-    // IMPORTANT UX: return a friendly message instead of "Replay blocked"
+    // ✅ One vote PER DAY per wallet per card
+    // If they try again same day (even opposite direction), block.
+    {
+      const dayKey = `vote:day:${pubkey}:${cardId}:${today}`;
+      const ok = await setIfNotExists(dayKey, String(v), 2 * 24 * 60 * 60); // keep 2 days
+      if (!ok) {
+        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (1 VOTE PER DAY)." });
+      }
+    }
+
+    // Replay protection (same signature spam)
+    // Friendly message if hit (rare now, because dayKey blocks most repeats)
     {
       const sigHash = sha256Hex(`${pubkey}|${message}|${signature}`);
       const replayKey = `vote:replay:${sigHash}`;
       const ok = await setIfNotExists(replayKey, "1", 24 * 60 * 60);
       if (!ok) {
-        return j(res, 429, {
-          error: "VOTE LIMIT FOR THIS CARD REACHED (YOU CAN SWITCH UP↔DOWN ONCE)."
-        });
+        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (1 VOTE PER DAY)." });
       }
     }
 
@@ -59,6 +67,11 @@ export default async function handler(req, res) {
       if (!(amt > 0)) return j(res, 403, { error: "Hold $COMCOIN to vote" });
     }
 
+    // Since we enforce "one vote/day", we do NOT allow updating the same row as a “switch”.
+    // We still store the latest vote in DB (unique constraint handles repeats historically),
+    // but the dayKey ensures only 1 action/day reaches here.
+
+    // Check previous vote for totals delta
     const prevRows = await sql`
       select vote from votes where card_id = ${cardId} and voter_wallet = ${pubkey} limit 1
     `;
@@ -77,10 +90,13 @@ export default async function handler(req, res) {
       if (v === 1) upDelta = 1;
       else downDelta = 1;
     } else if (prev !== v) {
+      // This can only happen on a later day (since we block multiple per day).
       if (prev === 1) upDelta -= 1;
       if (prev === -1) downDelta -= 1;
       if (v === 1) upDelta += 1;
       if (v === -1) downDelta += 1;
+    } else {
+      // Same vote as before (likely another day) — no delta
     }
 
     if (upDelta !== 0 || downDelta !== 0) {

@@ -59,7 +59,7 @@ const walletCardsMsg = document.getElementById("walletCardsMsg");
 const walletCardsGrid = document.getElementById("walletCardsGrid");
 const btnBackToCards = document.getElementById("btnBackToCards");
 
-/* ---------- NEW: card details elements ---------- */
+/* ---------- card details elements ---------- */
 const cardTitle = document.getElementById("cardTitle");
 const btnCardBack = document.getElementById("btnCardBack");
 const btnCardRefresh = document.getElementById("btnCardRefresh");
@@ -71,7 +71,7 @@ const cardVotesList = document.getElementById("cardVotesList");
 const cardChart = document.getElementById("cardChart");
 const cardMsg = document.getElementById("cardMsg");
 
-/* ---------- NEW: detail page voting elements (safe if missing) ---------- */
+/* ---------- detail page voting elements (safe if missing) ---------- */
 const btnCardVoteUp = document.getElementById("btnCardVoteUp");
 const btnCardVoteDown = document.getElementById("btnCardVoteDown");
 const cardVoteStatusPill = document.getElementById("cardVoteStatusPill");
@@ -94,8 +94,11 @@ const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)"
 let currentCardId = null;
 let cardPollTimer = null;
 
-/* ---------- NEW: prevent stale details overwriting ---------- */
+/* prevent stale details overwriting */
 let cardDetailsReqToken = 0;
+
+/* prevent image refresh on details updates */
+let currentCardImageBase = null;
 
 /* ---------- ranks ---------- */
 const RANKS = [
@@ -142,7 +145,6 @@ function setActiveCardsMessage(text = "", kind = "") {
   else setCardsMsg(text, kind);
 }
 
-/* ---------- NEW: detail page message helper ---------- */
 function setCardMsg(text = "", kind = "") {
   if (!cardMsg) return;
   cardMsg.classList.remove("ok", "bad");
@@ -194,7 +196,6 @@ function showView(which) {
   tabCards?.classList.toggle("active", cards);
   tabMarket?.classList.toggle("active", market);
 
-  // stop live polling if leaving card details
   if (!card) stopCardPolling();
 }
 
@@ -264,7 +265,6 @@ async function waitForImagesIn(container) {
   }));
 }
 
-/* ---------- NEW: wait for a single image ---------- */
 function waitForImage(imgEl) {
   if (!imgEl) return Promise.resolve();
   if (imgEl.complete && imgEl.naturalWidth > 0) return Promise.resolve();
@@ -722,15 +722,17 @@ function updateCachesAfterVote(cardId, up, down) {
 }
 
 async function voteCard(cardId, vote, pillEl) {
+  const onDetails = viewCard && !viewCard.classList.contains("hidden");
+
   try {
     if (!publicKeyBase58) {
-      setActiveCardsMessage("CONNECT WALLET TO VOTE.", "bad");
+      if (onDetails) setCardMsg("CONNECT WALLET TO VOTE.", "bad");
+      else setActiveCardsMessage("CONNECT WALLET TO VOTE.", "bad");
       showView("gen");
       return;
     }
 
-    // if on details page, show the message there too
-    if (viewCard && !viewCard.classList.contains("hidden")) {
+    if (onDetails) {
       setCardMsg("SIGN TO VOTE…", "");
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "SIGNING…";
     } else {
@@ -764,16 +766,16 @@ async function voteCard(cardId, vote, pillEl) {
 
     updateCachesAfterVote(cardId, up, down);
 
-    if (viewCard && !viewCard.classList.contains("hidden")) {
-      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE LOCKED (TODAY)";
+    if (onDetails) {
+      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
       setCardMsg(VOTE_RULE_TEXT, "ok");
+
+      // IMPORTANT: refresh details WITHOUT refreshing image
+      if (currentCardId && currentCardId === cardId) {
+        setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 400);
+      }
     } else {
       setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
-    }
-
-    // if viewing this card details, refresh it soon
-    if (currentCardId && currentCardId === cardId) {
-      setTimeout(() => loadCardDetails(cardId, { silent: true }), 800);
     }
   } catch (e) {
     const raw = String(e.message || e);
@@ -782,7 +784,7 @@ async function voteCard(cardId, vote, pillEl) {
       raw.toLowerCase().includes("limit") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw;
 
-    if (viewCard && !viewCard.classList.contains("hidden")) {
+    if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "1 VOTE / DAY";
       setCardMsg(nicer, "bad");
     } else {
@@ -820,7 +822,6 @@ function renderCards(container, items, opts = {}) {
     const down = Number(it.downvotes ?? 0);
     const score = (typeof it.score === "number") ? it.score : (up - down);
 
-    // CLICK IMAGE => OPEN DETAILS
     img.addEventListener("click", async () => {
       if (!id) return;
       await openCardDetails(id);
@@ -926,9 +927,8 @@ async function openWalletPage(wallet) {
   }
 }
 
-/* ---------- Card Details (NEW) ---------- */
+/* ---------- Card Details ---------- */
 btnCardBack && (btnCardBack.onclick = async () => {
-  // go back to last place: cards page
   showView("cards");
   openCardsSection(lastCardsView || "board");
   if (lastCardsView === "mine") await showMyCardsFromCacheOrLoad();
@@ -937,7 +937,7 @@ btnCardBack && (btnCardBack.onclick = async () => {
 
 btnCardRefresh && (btnCardRefresh.onclick = async () => {
   if (!currentCardId) return;
-  await loadCardDetails(currentCardId, { silent: false });
+  await loadCardDetails(currentCardId, { silent: false, forceImage: false });
 });
 
 function stopCardPolling() {
@@ -949,16 +949,16 @@ function startCardPolling(cardId) {
   stopCardPolling();
   cardPollTimer = setInterval(() => {
     if (!currentCardId) return;
-    loadCardDetails(currentCardId, { silent: true });
+    loadCardDetails(currentCardId, { silent: true, forceImage: false });
   }, 10_000);
 }
 
 async function openCardDetails(cardId) {
-  // NEW: bump token so stale requests can’t overwrite
   const myToken = ++cardDetailsReqToken;
   currentCardId = cardId;
 
-  // NEW: clear stale UI immediately
+  currentCardImageBase = null; // reset for first load of a new card
+
   showView("card");
   if (cardTitle) cardTitle.textContent = "LOADING…";
   if (cardMeta) cardMeta.innerHTML = "—";
@@ -970,13 +970,13 @@ async function openCardDetails(cardId) {
     cardImg.style.visibility = "hidden";
   }
   if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-  setCardMsg("LOADING CARD DETAILS…", "");
+  setCardMsg(VOTE_RULE_TEXT, "");
 
-  await loadCardDetails(cardId, { silent: true, token: myToken });
+  await loadCardDetails(cardId, { silent: true, token: myToken, forceImage: true });
   startCardPolling(cardId);
 }
 
-/* NEW: wire detail vote buttons (if present) */
+/* detail page vote buttons */
 btnCardVoteUp && (btnCardVoteUp.onclick = async () => {
   if (!currentCardId) return;
   await voteCard(currentCardId, +1, cardScorePill);
@@ -992,15 +992,8 @@ function drawNetChart(canvas, series) {
   const w = canvas.width;
   const h = canvas.height;
 
-  // clear
   ctx.clearRect(0, 0, w, h);
 
-  // background grid
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "rgba(0,0,0,0)";
-  ctx.fillRect(0,0,w,h);
-
-  // if no data
   if (!series || !series.length) {
     ctx.fillStyle = "rgba(233,255,241,.80)";
     ctx.font = "12px 'Press Start 2P'";
@@ -1012,10 +1005,8 @@ function drawNetChart(canvas, series) {
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
   const pad = 14;
-
   const range = (maxV - minV) || 1;
 
-  // axes
   ctx.strokeStyle = "rgba(180,255,210,.18)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1024,7 +1015,6 @@ function drawNetChart(canvas, series) {
   ctx.lineTo(w - pad, h - pad);
   ctx.stroke();
 
-  // midline (0) if within range
   if (minV <= 0 && maxV >= 0) {
     const y0 = (h - pad) - ((0 - minV) / range) * (h - 2*pad);
     ctx.strokeStyle = "rgba(200,255,0,.20)";
@@ -1034,7 +1024,6 @@ function drawNetChart(canvas, series) {
     ctx.stroke();
   }
 
-  // line
   ctx.strokeStyle = "rgba(200,255,0,.95)";
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1047,15 +1036,13 @@ function drawNetChart(canvas, series) {
   }
   ctx.stroke();
 
-  // last point
   const lx = pad + (1) * (w - 2*pad);
   const ly = (h - pad) - ((values[values.length-1] - minV) / range) * (h - 2*pad);
   ctx.fillStyle = "rgba(46,229,157,.95)";
   ctx.fillRect(lx-4, ly-4, 8, 8);
 }
 
-async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
-  // If caller didn’t pass a token, use current global value
+async function loadCardDetails(cardId, { silent = true, token = null, forceImage = false } = {}) {
   const myToken = token ?? cardDetailsReqToken;
 
   try {
@@ -1067,8 +1054,6 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
     try { data = JSON.parse(text); } catch {}
 
     if (!res.ok) throw new Error(data?.error || text || "FAILED TO LOAD DETAILS");
-
-    // NEW: ignore stale response if user clicked another card
     if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
 
     const c = data.card;
@@ -1077,11 +1062,19 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
 
-    // NEW: set image, but keep hidden until actually loaded
+    // IMPORTANT: do NOT refresh image unless forceImage==true or the base changes
     if (cardImg) {
-      cardImg.style.visibility = "hidden";
-      const url = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
-      cardImg.src = url;
+      const base = c.imageUrl;
+      const shouldSet = forceImage || !currentCardImageBase || (currentCardImageBase !== base);
+
+      if (shouldSet) {
+        currentCardImageBase = base;
+        cardImg.style.visibility = "hidden";
+        cardImg.src = base; // NO cache-buster here (signed URL already unique enough)
+        await waitForImage(cardImg);
+        if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
+        cardImg.style.visibility = "visible";
+      }
     }
 
     if (cardScorePill) cardScorePill.textContent = `SCORE: ${c.score}  (▲${c.upvotes} ▼${c.downvotes})`;
@@ -1095,7 +1088,6 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
         `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
         `CREATED: ${escapeHtml(fmtTime(c.created_at))}<br/>` +
-        `VIEW: LAST 50 VOTES + LIVE NET GRAPH<br/>` +
         `<span style="color:rgba(233,255,241,.80)">${escapeHtml(VOTE_RULE_TEXT)}</span>`;
       cardMeta.querySelector("#cdOwner")?.addEventListener("click", async () => {
         await openWalletPage(ownerFull);
@@ -1106,7 +1098,6 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
       });
     }
 
-    // votes list
     if (cardVotesList) {
       if (!votes.length) {
         cardVotesList.innerHTML = `<div class="voteRowLine">NO VOTES YET</div>`;
@@ -1123,7 +1114,6 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
           `;
         }).join("");
 
-        // wallet clicks -> wallet page
         cardVotesList.querySelectorAll("[data-w]").forEach(el => {
           el.addEventListener("click", async () => {
             const w = el.getAttribute("data-w");
@@ -1133,24 +1123,13 @@ async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
       }
     }
 
-    // chart
     drawNetChart(cardChart, series);
 
-    // NEW: wait for the image before showing “loaded”
-    if (cardImg) {
-      await waitForImage(cardImg);
-
-      // ignore if stale while waiting for img
-      if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
-
-      cardImg.style.visibility = "visible";
-    }
-
-    setCardMsg("LIVE UPDATES ON • LAST 50 VOTES", "ok");
+    // keep rule visible (don’t replace it with “live updates”)
+    setCardMsg(VOTE_RULE_TEXT, "ok");
+    if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
   } catch (e) {
-    // ignore errors from stale calls
     if (myToken !== cardDetailsReqToken) return;
-
     setCardMsg(String(e.message || e), "bad");
   }
 }

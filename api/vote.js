@@ -18,17 +18,17 @@ export default async function handler(req, res) {
     const v = Number(vote);
     if (v !== 1 && v !== -1) return j(res, 400, { error: "vote must be 1 or -1" });
 
-    // 1) Strict message validation: "COM COIN vote | <cardId> | <vote> | YYYY-MM-DD"
+    // Strict message validation: "COM COIN vote | <cardId> | <vote> | YYYY-MM-DD"
     const today = new Date().toISOString().slice(0, 10);
     const expectedMsg = `${VOTE_MSG_PREFIX}${cardId} | ${v} | ${today}`;
     if (message !== expectedMsg) return j(res, 400, { error: "Invalid message format" });
 
-    // 2) Verify signature
+    // Verify signature
     verifyPhantomSign({ pubkey, message, signature });
 
     const ip = getClientIp(req);
 
-    // 3) Rate limits (disable for testing)
+    // Rate limits (disable for testing)
     if (process.env.DISABLE_RATE_LIMIT !== "1") {
       // per IP: 120 votes / 10 minutes
       await rateLimitOrThrow(`rl:vote:ip:${ip}`, 120, 600);
@@ -36,18 +36,21 @@ export default async function handler(req, res) {
       await rateLimitOrThrow(`rl:vote:wallet:${pubkey}`, 60, 600);
     }
 
-    // 4) Replay protection (same signed message+sig spam)
+    // Replay protection: same signed payload spam
+    // IMPORTANT UX: return a friendly message instead of "Replay blocked"
     {
       const sigHash = sha256Hex(`${pubkey}|${message}|${signature}`);
       const replayKey = `vote:replay:${sigHash}`;
       const ok = await setIfNotExists(replayKey, "1", 24 * 60 * 60);
-      if (!ok) return j(res, 429, { error: "Replay blocked" });
+      if (!ok) {
+        return j(res, 429, {
+          error: "VOTE LIMIT FOR THIS CARD REACHED (YOU CAN SWITCH UP↔DOWN ONCE)."
+        });
+      }
     }
 
-    // Optional: require hold to vote (simple gate)
-    // If you want this, set VOTE_REQUIRE_HOLD=1 and ensure your /api/balance works.
+    // Optional: require hold to vote
     if (process.env.VOTE_REQUIRE_HOLD === "1") {
-      // NOTE: this calls your own balance endpoint to avoid duplicating RPC logic here
       const r = await fetch(`${originFromReq(req)}/api/balance?pubkey=${encodeURIComponent(pubkey)}`);
       const t = await r.text();
       let b = null;
@@ -95,7 +98,12 @@ export default async function handler(req, res) {
 
     const cur = await sql`select upvotes, downvotes from com_cards where id=${cardId} limit 1`;
     if (!cur?.length) return j(res, 404, { error: "Card not found" });
-    return j(res, 200, { ok: true, upvotes: cur[0].upvotes, downvotes: cur[0].downvotes, score: cur[0].upvotes - cur[0].downvotes });
+    return j(res, 200, {
+      ok: true,
+      upvotes: cur[0].upvotes,
+      downvotes: cur[0].downvotes,
+      score: cur[0].upvotes - cur[0].downvotes
+    });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });
   }

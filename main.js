@@ -197,50 +197,98 @@ function cacheFresh(entry) {
   return (Date.now() - entry.ts) < CACHE_TTL_MS;
 }
 
-/* ---------------- Loading overlays (simple) ---------------- */
+/* ---------------- Inline “LOADING COM CARDS…” placeholders ---------------- */
 
-function setLoading(containerEl, on, text = "LOADING…") {
-  if (!containerEl) return;
+function showGridPlaceholders(gridEl, count = 9, label = "LOADING COM CARDS…") {
+  if (!gridEl) return;
+  gridEl.innerHTML = "";
 
-  let overlay = containerEl.querySelector(":scope > ._px_loading");
-  if (on) {
-    if (!overlay) {
-      overlay = document.createElement("div");
-      overlay.className = "_px_loading";
-      overlay.style.position = "absolute";
-      overlay.style.inset = "0";
-      overlay.style.display = "flex";
-      overlay.style.alignItems = "center";
-      overlay.style.justifyContent = "center";
-      overlay.style.background = "rgba(0,0,0,.65)";
-      overlay.style.border = "4px solid rgba(180,255,210,.18)";
-      overlay.style.boxShadow = "0 10px 0 rgba(0,0,0,.45)";
-      overlay.style.zIndex = "40";
-      overlay.style.pointerEvents = "none";
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement("div");
+    card.className = "card px-border-soft";
+    card.style.opacity = "0.95";
 
-      const inner = document.createElement("div");
-      inner.style.fontFamily = `"Press Start 2P", monospace`;
-      inner.style.fontSize = "12px";
-      inner.style.letterSpacing = ".14em";
-      inner.style.textTransform = "uppercase";
-      inner.style.color = "#C8FF00";
-      inner.style.textShadow = "0 10px 0 rgba(0,0,0,.45)";
-      inner.textContent = text;
+    const box = document.createElement("div");
+    box.style.border = "4px solid rgba(180,255,210,.18)";
+    box.style.boxShadow = "0 10px 0 rgba(0,0,0,.35)";
+    box.style.background = "rgba(0,0,0,.35)";
+    box.style.height = "260px";
+    box.style.position = "relative";
+    box.style.display = "flex";
+    box.style.alignItems = "center";
+    box.style.justifyContent = "center";
 
-      overlay.appendChild(inner);
+    const txt = document.createElement("div");
+    txt.textContent = label;
+    txt.style.fontFamily = `"Press Start 2P", monospace`;
+    txt.style.fontSize = "10px";
+    txt.style.letterSpacing = ".12em";
+    txt.style.textTransform = "uppercase";
+    txt.style.color = "#C8FF00";
+    txt.style.textShadow = "0 10px 0 rgba(0,0,0,.45)";
+    txt.style.textAlign = "center";
+    txt.style.padding = "0 10px";
+    txt.style.lineHeight = "1.8";
+    txt.style.animation = "pxPulse 0.9s ease-in-out infinite";
 
-      // ensure container has positioning
-      const style = getComputedStyle(containerEl);
-      if (style.position === "static") containerEl.style.position = "relative";
+    box.appendChild(txt);
+    card.appendChild(box);
 
-      containerEl.appendChild(overlay);
-    } else {
-      overlay.querySelector("div") && (overlay.querySelector("div").textContent = text);
-      overlay.style.display = "flex";
-    }
-  } else {
-    if (overlay) overlay.style.display = "none";
+    const meta = document.createElement("div");
+    meta.className = "cardMeta";
+    meta.textContent = "…";
+    card.appendChild(meta);
+
+    gridEl.appendChild(card);
   }
+
+  injectPulseKeyframesOnce();
+}
+
+function showMiniPlaceholders(miniEl, count = 12, label = "LOADING") {
+  if (!miniEl) return;
+  miniEl.innerHTML = "";
+
+  for (let i = 0; i < count; i++) {
+    const tile = document.createElement("div");
+    tile.style.border = "4px solid rgba(180,255,210,.18)";
+    tile.style.boxShadow = "0 8px 0 rgba(0,0,0,.30)";
+    tile.style.background = "rgba(0,0,0,.35)";
+    tile.style.height = "70px";
+    tile.style.display = "flex";
+    tile.style.alignItems = "center";
+    tile.style.justifyContent = "center";
+    tile.style.cursor = "default";
+
+    const txt = document.createElement("div");
+    txt.textContent = label;
+    txt.style.fontFamily = `"Press Start 2P", monospace`;
+    txt.style.fontSize = "8px";
+    txt.style.letterSpacing = ".12em";
+    txt.style.textTransform = "uppercase";
+    txt.style.color = "#C8FF00";
+    txt.style.textShadow = "0 8px 0 rgba(0,0,0,.45)";
+    txt.style.animation = "pxPulse 0.9s ease-in-out infinite";
+    txt.style.textAlign = "center";
+
+    tile.appendChild(txt);
+    miniEl.appendChild(tile);
+  }
+
+  injectPulseKeyframesOnce();
+}
+
+function injectPulseKeyframesOnce() {
+  if (document.getElementById("_pxPulseStyle")) return;
+  const style = document.createElement("style");
+  style.id = "_pxPulseStyle";
+  style.textContent = `
+    @keyframes pxPulse {
+      0%,100% { transform: translateY(0); opacity: .65; }
+      50% { transform: translateY(-1px); opacity: 1; }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 /* ---------------- Pixel dropdown wiring ---------------- */
@@ -256,9 +304,7 @@ cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
   const val = btn.getAttribute("data-value");
   setSort(val);
   toggleSortMenu(false);
-
-  // instant from cache if available
-  showCardsFromCacheOrLoad();
+  await showCardsFromCacheOrLoad();
 });
 
 document.addEventListener("click", (e) => {
@@ -296,7 +342,6 @@ async function connectPhantom(opts) {
   setConnectedUI(true);
   await refreshBalanceAndRank();
 
-  // warm rank cache
   if (!viewRank?.classList.contains("hidden")) await loadRankCards({ preferCache: true });
 }
 
@@ -330,7 +375,6 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   if (rankCardsMsg) rankCardsMsg.textContent = "CONNECT TO LOAD YOUR COM CARDS.";
   if (rankMiniGrid) rankMiniGrid.innerHTML = "";
 
-  // keep board cache (public data), but clear wallet caches
   walletCardsCache.clear();
   myRankCardsCache = { items: null, ts: 0 };
 
@@ -457,12 +501,11 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
-    // refresh caches lightly (optional)
     myRankCardsCache = { items: null, ts: 0 };
     if (publicKeyBase58) walletCardsCache.delete(publicKeyBase58);
 
     if (!viewCards?.classList.contains("hidden")) {
-      boardCache.delete(currentSort); // force refresh next load
+      boardCache.delete(currentSort);
       await showCardsFromCacheOrLoad();
     }
     if (!viewRank?.classList.contains("hidden")) {
@@ -492,7 +535,7 @@ btnDownload && (btnDownload.onclick = () => {
   a.remove();
 });
 
-/* ---------------- Com Cards: cache + loading ---------------- */
+/* ---------------- Com Cards: cache + inline loading that stays until images load ---------------- */
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
   boardCache.delete(currentSort);
@@ -513,13 +556,12 @@ btnBackToCards && (btnBackToCards.onclick = async () => {
 });
 
 async function showCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
-  // If cached and fresh → render instantly
   const cached = boardCache.get(currentSort);
+
   if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
     setCardsMsg(VOTE_RULE_TEXT, "");
-    renderCards(cardsGrid, cached.items, { showWalletLink: true });
+    renderCards(cardsGrid, cached.items, { showWalletLink: true, withPerImageLoading: true });
 
-    // optional background refresh if close to stale
     if ((Date.now() - cached.ts) > (CACHE_TTL_MS * 0.8)) {
       loadBoard(currentSort, { background: true }).catch(() => {});
     }
@@ -534,8 +576,8 @@ async function loadBoard(sort, { background = false } = {}) {
     if (!cardsGrid) return;
 
     if (!background) {
-      setCardsMsg(VOTE_RULE_TEXT, "");
-      setLoading(viewCards, true, "LOADING COM CARDS…");
+      setCardsMsg("LOADING COM CARDS…", "");
+      showGridPlaceholders(cardsGrid, 9, "LOADING COM CARDS…");
     }
 
     const res = await fetch(`/api/cards_list?sort=${encodeURIComponent(sort)}&limit=100`);
@@ -556,23 +598,22 @@ async function loadBoard(sort, { background = false } = {}) {
       return;
     }
 
-    // Only render if user is still on cards view
     if (!viewCards.classList.contains("hidden")) {
-      renderCards(cardsGrid, items, { showWalletLink: true });
-      if (!background) setCardsMsg(VOTE_RULE_TEXT, "");
+      renderCards(cardsGrid, items, { showWalletLink: true, withPerImageLoading: true });
+
+      // Keep “LOADING…” until ALL images finished, then put rule back
+      await waitForImagesIn(cardsGrid);
+      if (!viewCards.classList.contains("hidden")) setCardsMsg(VOTE_RULE_TEXT, "");
     }
   } catch (e) {
     if (!background) setCardsMsg(String(e.message || e), "bad");
-  } finally {
-    if (!background) setLoading(viewCards, false);
   }
 }
 
 async function searchById(cardId) {
   try {
-    setCardsMsg("SEARCHING…", "");
-    setLoading(viewCards, true, "SEARCHING…");
-    if (cardsGrid) cardsGrid.innerHTML = "";
+    setCardsMsg("LOADING COM CARDS…", "");
+    showGridPlaceholders(cardsGrid, 3, "LOADING COM CARDS…");
 
     const res = await fetch(`/api/card_get?id=${encodeURIComponent(cardId)}`);
     const text = await res.text();
@@ -584,12 +625,11 @@ async function searchById(cardId) {
     const item = data?.item;
     if (!item) throw new Error("NOT FOUND");
 
+    renderCards(cardsGrid, [item], { showWalletLink: true, withPerImageLoading: true });
+    await waitForImagesIn(cardsGrid);
     setCardsMsg(VOTE_RULE_TEXT, "");
-    renderCards(cardsGrid, [item], { showWalletLink: true });
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
-  } finally {
-    setLoading(viewCards, false);
   }
 }
 
@@ -631,7 +671,7 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
-    // Update cached board counts instantly (so switching tabs stays instant)
+    // update cached board item
     const entry = boardCache.get(currentSort);
     if (entry?.items?.length) {
       for (const it of entry.items) {
@@ -652,7 +692,7 @@ async function voteCard(cardId, vote, pillEl) {
   }
 }
 
-/* ---------------- Rendering ---------------- */
+/* ---------------- Rendering (per-image loading until loaded) ---------------- */
 
 function renderCards(container, items, opts = {}) {
   if (!container) return;
@@ -662,11 +702,50 @@ function renderCards(container, items, opts = {}) {
     const card = document.createElement("div");
     card.className = "card px-border-soft";
 
+    // wrapper so we can show “LOADING COM CARDS…” INSIDE the card until image loads
+    const imgWrap = document.createElement("div");
+    imgWrap.style.position = "relative";
+
+    const loadingBadge = document.createElement("div");
+    loadingBadge.textContent = "LOADING COM CARDS…";
+    loadingBadge.style.position = "absolute";
+    loadingBadge.style.inset = "0";
+    loadingBadge.style.display = opts.withPerImageLoading ? "flex" : "none";
+    loadingBadge.style.alignItems = "center";
+    loadingBadge.style.justifyContent = "center";
+    loadingBadge.style.textAlign = "center";
+    loadingBadge.style.padding = "0 12px";
+    loadingBadge.style.fontFamily = `"Press Start 2P", monospace`;
+    loadingBadge.style.fontSize = "10px";
+    loadingBadge.style.letterSpacing = ".12em";
+    loadingBadge.style.textTransform = "uppercase";
+    loadingBadge.style.color = "#C8FF00";
+    loadingBadge.style.textShadow = "0 10px 0 rgba(0,0,0,.45)";
+    loadingBadge.style.background = "rgba(0,0,0,.35)";
+    loadingBadge.style.border = "4px solid rgba(180,255,210,.18)";
+    loadingBadge.style.boxShadow = "0 10px 0 rgba(0,0,0,.35)";
+    loadingBadge.style.animation = "pxPulse 0.9s ease-in-out infinite";
+
     const img = document.createElement("img");
     img.className = "cardImg";
     img.alt = it.name || "COM CARD";
     img.src = it.imageUrl || it.image_url || "";
-    card.appendChild(img);
+
+    if (opts.withPerImageLoading) {
+      img.style.opacity = "0";
+      img.style.transition = "opacity 120ms linear";
+      img.addEventListener("load", () => {
+        loadingBadge.style.display = "none";
+        img.style.opacity = "1";
+      }, { once: true });
+      img.addEventListener("error", () => {
+        loadingBadge.textContent = "FAILED TO LOAD";
+      }, { once: true });
+    }
+
+    imgWrap.appendChild(img);
+    imgWrap.appendChild(loadingBadge);
+    card.appendChild(imgWrap);
 
     const name = document.createElement("div");
     name.className = "cardName";
@@ -736,15 +815,33 @@ function renderCards(container, items, opts = {}) {
     card.appendChild(voteRow);
     container.appendChild(card);
   }
+
+  injectPulseKeyframesOnce();
 }
 
-/* ---------------- Wallet profile + rank cards (cache + loading) ---------------- */
+async function waitForImagesIn(container) {
+  if (!container) return;
+  const imgs = Array.from(container.querySelectorAll("img"));
+  if (!imgs.length) return;
+
+  await Promise.allSettled(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    });
+  }));
+}
+
+/* ---------------- Wallet profile + rank cards (inline loading) ---------------- */
 
 async function openWalletPage(wallet) {
   showView("wallet");
   walletPageSub.textContent = `WALLET: ${wallet}`;
-  walletCardsMsg.textContent = "LOADING WALLET CARDS…";
+  walletCardsMsg.textContent = "LOADING COM CARDS…";
   walletCardsGrid.innerHTML = "";
+  showGridPlaceholders(walletCardsGrid, 6, "LOADING COM CARDS…");
 
   const isMe = publicKeyBase58 && wallet === publicKeyBase58;
 
@@ -756,12 +853,11 @@ async function openWalletPage(wallet) {
     walletRankCallout.textContent = "THIS IS A COM CARDS PROFILE. (BALANCE RANK IS PRIVATE)";
   }
 
-  // cache hit
   const cached = walletCardsCache.get(wallet);
   if (cacheFresh(cached) && Array.isArray(cached.items)) {
-    walletCardsMsg.textContent = `SHOWING ${cached.items.length} COM CARDS.`;
-    renderCards(walletCardsGrid, cached.items, { showWalletLink: false });
-    // background refresh
+    renderCards(walletCardsGrid, cached.items, { showWalletLink: false, withPerImageLoading: true });
+    await waitForImagesIn(walletCardsGrid);
+    walletCardsMsg.textContent = cached.items.length ? `SHOWING ${cached.items.length} COM CARDS.` : "NO COM CARDS YET.";
     if ((Date.now() - cached.ts) > (CACHE_TTL_MS * 0.8)) {
       loadWalletCards(wallet, { background: true }).catch(() => {});
     }
@@ -773,8 +869,6 @@ async function openWalletPage(wallet) {
 
 async function loadWalletCards(wallet, { background = false } = {}) {
   try {
-    if (!background) setLoading(viewWallet, true, "LOADING WALLET…");
-
     const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(wallet)}&limit=100`);
     const text = await res.text();
     let data = null;
@@ -785,19 +879,16 @@ async function loadWalletCards(wallet, { background = false } = {}) {
     const items = data?.items || [];
     walletCardsCache.set(wallet, { items, ts: Date.now() });
 
-    if (!items.length) {
-      if (!background) walletCardsMsg.textContent = "NO COM CARDS YET.";
-      return;
-    }
-
     if (!viewWallet.classList.contains("hidden")) {
-      walletCardsMsg.textContent = `SHOWING ${items.length} COM CARDS.`;
-      renderCards(walletCardsGrid, items, { showWalletLink: false });
+      renderCards(walletCardsGrid, items, { showWalletLink: false, withPerImageLoading: true });
+      await waitForImagesIn(walletCardsGrid);
+      walletCardsMsg.textContent = items.length ? `SHOWING ${items.length} COM CARDS.` : "NO COM CARDS YET.";
     }
   } catch (e) {
-    if (!background) walletCardsMsg.textContent = String(e.message || e);
-  } finally {
-    if (!background) setLoading(viewWallet, false);
+    if (!background) {
+      walletCardsGrid.innerHTML = "";
+      walletCardsMsg.textContent = String(e.message || e);
+    }
   }
 }
 
@@ -810,17 +901,15 @@ async function loadRankCards({ preferCache = true } = {}) {
     }
 
     if (preferCache && cacheFresh(myRankCardsCache) && Array.isArray(myRankCardsCache.items)) {
-      renderRankMini(myRankCardsCache.items);
-      // background refresh
+      renderRankMini(myRankCardsCache.items, { withLoading: false });
       if ((Date.now() - myRankCardsCache.ts) > (CACHE_TTL_MS * 0.8)) {
         loadRankCards({ preferCache: false }).catch(() => {});
       }
       return;
     }
 
-    if (rankCardsMsg) rankCardsMsg.textContent = "LOADING YOUR COM CARDS…";
-    if (rankMiniGrid) rankMiniGrid.innerHTML = "";
-    setLoading(viewRank, true, "LOADING RANK…");
+    if (rankCardsMsg) rankCardsMsg.textContent = "LOADING COM CARDS…";
+    showMiniPlaceholders(rankMiniGrid, 18, "LOADING");
 
     const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(publicKeyBase58)}&limit=100`);
     const text = await res.text();
@@ -832,15 +921,15 @@ async function loadRankCards({ preferCache = true } = {}) {
     const items = data?.items || [];
     myRankCardsCache = { items, ts: Date.now() };
 
-    renderRankMini(items);
+    renderRankMini(items, { withLoading: true });
+    await waitForImagesIn(rankMiniGrid);
+    if (rankCardsMsg) rankCardsMsg.textContent = items.length ? `YOU HAVE ${items.length} COM CARDS.` : "NO COM CARDS YET. GO GENERATE ONE.";
   } catch (e) {
     if (rankCardsMsg) rankCardsMsg.textContent = String(e.message || e);
-  } finally {
-    setLoading(viewRank, false);
   }
 }
 
-function renderRankMini(items) {
+function renderRankMini(items, { withLoading = true } = {}) {
   if (!rankMiniGrid || !rankCardsMsg) return;
 
   if (!items?.length) {
@@ -849,26 +938,65 @@ function renderRankMini(items) {
     return;
   }
 
-  rankCardsMsg.textContent = `YOU HAVE ${items.length} COM CARDS.`;
   rankMiniGrid.innerHTML = "";
 
   for (const it of items.slice(0, 24)) {
+    const wrap = document.createElement("div");
+    wrap.style.position = "relative";
+
     const img = document.createElement("img");
     img.className = "miniThumb";
     img.src = it.imageUrl || it.image_url || "";
     img.alt = it.name || "COM CARD";
+
+    const badge = document.createElement("div");
+    badge.textContent = "LOADING";
+    badge.style.position = "absolute";
+    badge.style.inset = "0";
+    badge.style.display = withLoading ? "flex" : "none";
+    badge.style.alignItems = "center";
+    badge.style.justifyContent = "center";
+    badge.style.textAlign = "center";
+    badge.style.fontFamily = `"Press Start 2P", monospace`;
+    badge.style.fontSize = "8px";
+    badge.style.letterSpacing = ".12em";
+    badge.style.textTransform = "uppercase";
+    badge.style.color = "#C8FF00";
+    badge.style.textShadow = "0 8px 0 rgba(0,0,0,.45)";
+    badge.style.background = "rgba(0,0,0,.35)";
+    badge.style.border = "4px solid rgba(180,255,210,.18)";
+    badge.style.boxShadow = "0 8px 0 rgba(0,0,0,.30)";
+    badge.style.animation = "pxPulse 0.9s ease-in-out infinite";
+
+    if (withLoading) {
+      img.style.opacity = "0";
+      img.style.transition = "opacity 120ms linear";
+      img.addEventListener("load", () => {
+        badge.style.display = "none";
+        img.style.opacity = "1";
+      }, { once: true });
+      img.addEventListener("error", () => {
+        badge.textContent = "FAIL";
+      }, { once: true });
+    }
+
     img.onclick = async () => {
       showView("cards");
       if (searchCardId) searchCardId.value = it.id;
       setSort(currentSort);
-      setCardsMsg(VOTE_RULE_TEXT, "");
+      setCardsMsg("LOADING COM CARDS…", "");
       await searchById(it.id);
     };
-    rankMiniGrid.appendChild(img);
+
+    wrap.appendChild(img);
+    wrap.appendChild(badge);
+    rankMiniGrid.appendChild(wrap);
   }
+
+  injectPulseKeyframesOnce();
 }
 
-/* ---------------- Init + auto reconnect ---------------- */
+/* ---------------- Auto reconnect ---------------- */
 
 (async function autoReconnect() {
   try {

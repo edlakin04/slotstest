@@ -173,7 +173,7 @@
       appearance:none;
       border: 4px solid var(--border);
       background: rgba(0,0,0,.80);
-      color:var(--text);
+      color: var(--text);
       padding: 12px 12px;
       box-shadow: 0 6px 0 rgba(0,0,0,.45);
       cursor:pointer;
@@ -430,8 +430,7 @@
       border: 4px solid var(--border2);
       box-shadow: 0 10px 0 rgba(0,0,0,.35);
       background: rgba(0,0,0,.35);
-      /* clicking handled in main.js (details page) */
-      cursor: pointer;
+      cursor:pointer;
     }
     .cardName{
       font-size: 10px;
@@ -656,7 +655,7 @@
       color: var(--text);
     }
 
-    /* ===== ADDED: COM CARD DETAILS VIEW ===== */
+    /* ===== DETAILS ===== */
     .detailWrap{
       max-width: 980px;
       margin: 0 auto;
@@ -939,7 +938,7 @@
         </div>
       </div>
 
-      <!-- ✅ ADDED: COM CARD DETAILS (CLICK A CARD TO OPEN) -->
+      <!-- ✅ DETAILS PAGE -->
       <div class="stage px-border hidden" id="viewCard">
         <div class="detailWrap px-border-soft">
           <div class="detailTop">
@@ -956,6 +955,15 @@
               <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
                 <div class="pill" id="cardScorePill">SCORE: —</div>
                 <div class="pill" id="cardCreatedPill">CREATED: —</div>
+              </div>
+
+              <!-- ✅ ADDED: VOTE ON DETAIL PAGE -->
+              <div class="voteRow" style="margin-top:12px;">
+                <div class="voteBtns">
+                  <button class="btn" id="btnCardVoteUp" type="button">UPVOTE</button>
+                  <button class="btn" id="btnCardVoteDown" type="button">DOWNVOTE</button>
+                </div>
+                <div class="pill" id="cardVoteStatusPill">1 VOTE / DAY</div>
               </div>
             </div>
 
@@ -979,7 +987,7 @@
         </div>
       </div>
 
-      <!-- COM CARDS MARKET (INFO PAGE) -->
+      <!-- MARKET -->
       <div class="stage px-border hidden" id="viewMarket">
         <div class="bigTitle">COM CARDS MARKET</div>
 
@@ -1053,7 +1061,6 @@
         </div>
       </div>
 
-      <!-- ✅ keep ONLY ONE main.js include -->
       <script type="module" src="/main.js"></script>
     </div>
   </div>

@@ -3,11 +3,13 @@ import bs58 from "https://cdn.skypack.dev/bs58";
 const tabGen = document.getElementById("tabGen");
 const tabRank = document.getElementById("tabRank");
 const tabCards = document.getElementById("tabCards");
+const tabMarket = document.getElementById("tabMarket");
 
 const viewGen = document.getElementById("viewGen");
 const viewRank = document.getElementById("viewRank");
 const viewCards = document.getElementById("viewCards");
 const viewWallet = document.getElementById("viewWallet");
+const viewMarket = document.getElementById("viewMarket");
 
 const btnConnect = document.getElementById("btnConnect");
 const btnDisconnect = document.getElementById("btnDisconnect");
@@ -85,7 +87,7 @@ function setCardsMsg(text = "", kind = "") {
 
 function setCardsBigTitle(sort) {
   if (!cardsBigTitle) return;
-  cardsBigTitle.textContent = (sort || "trending").toUpperCase();
+  cardsBigTitle.textContent = (sort || "TRENDING").toUpperCase();
 }
 
 function getSortLabel(v){
@@ -112,26 +114,35 @@ function showView(which) {
   const rank = which === "rank";
   const cards = which === "cards";
   const wallet = which === "wallet";
+  const market = which === "market";
 
   viewGen?.classList.toggle("hidden", !gen);
   viewRank?.classList.toggle("hidden", !rank);
   viewCards?.classList.toggle("hidden", !cards);
   viewWallet?.classList.toggle("hidden", !wallet);
+  viewMarket?.classList.toggle("hidden", !market);
 
   tabGen?.classList.toggle("active", gen);
   tabRank?.classList.toggle("active", rank);
   tabCards?.classList.toggle("active", cards);
+  tabMarket?.classList.toggle("active", market);
 }
 
 tabGen && (tabGen.onclick = () => showView("gen"));
+
 tabRank && (tabRank.onclick = async () => {
   showView("rank");
   await loadRankCards();
 });
+
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
   setSort(currentSort);
   await loadBoard(currentSort);
+});
+
+tabMarket && (tabMarket.onclick = () => {
+  showView("market");
 });
 
 function isMobile() {

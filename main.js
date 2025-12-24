@@ -59,6 +59,8 @@ let lastImageSrc = null;
 // board sort state
 let currentSort = "trending";
 
+const VOTE_RULE_TEXT = "RULE: 1 VOTE PER WALLET PER CARD. YOU CAN SWITCH UP↔DOWN ONCE.";
+
 const RANKS = [
   { name: "Dust", min: 0 },
   { name: "Hodler", min: 1 },
@@ -138,6 +140,7 @@ tabRank && (tabRank.onclick = async () => {
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
   setSort(currentSort);
+  setCardsMsg(VOTE_RULE_TEXT, ""); // 👈 show rule whenever entering cards
   await loadBoard(currentSort);
 });
 
@@ -213,6 +216,7 @@ cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
   const val = btn.getAttribute("data-value");
   setSort(val);
   toggleSortMenu(false);
+  setCardsMsg(VOTE_RULE_TEXT, "");
   await loadBoard(currentSort);
 });
 
@@ -262,6 +266,7 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
 
   if (rankCardsMsg) rankCardsMsg.textContent = "CONNECT TO LOAD YOUR COM CARDS.";
   if (rankMiniGrid) rankMiniGrid.innerHTML = "";
+  setCardsMsg(VOTE_RULE_TEXT, "");
 });
 
 /* ---------------- Balance + Rank ---------------- */
@@ -386,6 +391,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     if (!viewCards?.classList.contains("hidden")) {
       setSort(currentSort);
+      setCardsMsg(VOTE_RULE_TEXT, "");
       await loadBoard(currentSort);
     }
     if (!viewRank?.classList.contains("hidden")) {
@@ -419,6 +425,7 @@ btnDownload && (btnDownload.onclick = () => {
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
   setSort(currentSort);
+  setCardsMsg(VOTE_RULE_TEXT, "");
   await loadBoard(currentSort);
 });
 
@@ -431,12 +438,17 @@ btnSearchCard && (btnSearchCard.onclick = async () => {
 btnBackToCards && (btnBackToCards.onclick = async () => {
   showView("cards");
   setSort(currentSort);
+  setCardsMsg(VOTE_RULE_TEXT, "");
   await loadBoard(currentSort);
 });
 
 async function loadBoard(sort) {
   try {
-    setCardsMsg("LOADING COM CARDS…");
+    // keep rule visible unless an error happens
+    if (!cardsGrid) return;
+
+    if (!cardsMsg?.classList.contains("bad")) setCardsMsg(VOTE_RULE_TEXT, "");
+
     if (cardsGrid) cardsGrid.innerHTML = "";
 
     const res = await fetch(`/api/cards_list?sort=${encodeURIComponent(sort)}&limit=100`);
@@ -452,7 +464,8 @@ async function loadBoard(sort) {
       return;
     }
 
-    setCardsMsg(`SHOWING ${items.length}`, "ok");
+    // small status update without killing the rule — keep it simple
+    // (rule remains in message line; count is shown via console if you want)
     renderCards(cardsGrid, items, { showWalletLink: true });
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
@@ -461,7 +474,7 @@ async function loadBoard(sort) {
 
 async function searchById(cardId) {
   try {
-    setCardsMsg("SEARCHING…");
+    setCardsMsg("SEARCHING…", "");
     if (cardsGrid) cardsGrid.innerHTML = "";
 
     const res = await fetch(`/api/card_get?id=${encodeURIComponent(cardId)}`);
@@ -474,7 +487,7 @@ async function searchById(cardId) {
     const item = data?.item;
     if (!item) throw new Error("NOT FOUND");
 
-    setCardsMsg(`FOUND ${item.id}`, "ok");
+    setCardsMsg(VOTE_RULE_TEXT, "");
     renderCards(cardsGrid, [item], { showWalletLink: true });
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
@@ -573,7 +586,7 @@ async function voteCard(cardId, vote, pillEl) {
       return;
     }
 
-    setCardsMsg("SIGN TO VOTE…");
+    setCardsMsg("SIGN TO VOTE…", "");
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
@@ -600,7 +613,8 @@ async function voteCard(cardId, vote, pillEl) {
     const score = Number(data?.score ?? (up - down));
 
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
-    setCardsMsg("VOTED.", "ok");
+
+    setCardsMsg(VOTE_RULE_TEXT, "ok");
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
   }
@@ -678,6 +692,7 @@ async function loadRankCards() {
         showView("cards");
         if (searchCardId) searchCardId.value = it.id;
         setSort(currentSort);
+        setCardsMsg(VOTE_RULE_TEXT, "");
         await searchById(it.id);
       };
       rankMiniGrid.appendChild(img);
@@ -699,9 +714,10 @@ async function loadRankCards() {
   }
 })();
 
-// init sort UI
+// init
 setSort(currentSort);
 showView("gen");
+setCardsMsg(VOTE_RULE_TEXT, "");
 
 function escapeHtml(s) {
   return String(s || "")

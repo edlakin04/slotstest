@@ -515,7 +515,7 @@
       text-align:center;
     }
 
-    /* ===== Pixel dropdown (custom, not native select) ===== */
+    /* ===== Pixel dropdown (custom) ===== */
     .dd{ position:relative; display:inline-block; }
     .ddBtn{
       appearance:none;
@@ -592,6 +592,67 @@
       transform: translateY(2px);
       box-shadow: 0 4px 0 rgba(0,0,0,.35);
     }
+
+    /* ===== MARKET INFO ===== */
+    .marketWrap{
+      max-width: 980px;
+      margin: 0 auto;
+      text-align:left;
+      padding: 14px 12px;
+    }
+    .marketTitle{
+      font-size: 12px;
+      letter-spacing:.14em;
+      text-transform: uppercase;
+      color: var(--hot);
+      margin: 0 0 10px;
+    }
+    .marketP{
+      font-size: 10px;
+      letter-spacing:.06em;
+      line-height: 2.0;
+      color: var(--muted);
+      margin: 10px 0;
+      word-break: break-word;
+      overflow-wrap:anywhere;
+    }
+    .marketGrid{
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .marketBox{
+      padding: 14px 12px;
+      min-width:0;
+    }
+    .marketBox h4{
+      margin: 0 0 10px;
+      font-size: 10px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .marketBox p{
+      margin: 0;
+      font-size: 10px;
+      letter-spacing:.06em;
+      line-height: 1.95;
+      color: var(--muted);
+    }
+    .tagPill{
+      display:inline-block;
+      margin-top: 12px;
+      border: 4px solid var(--border2);
+      background: rgba(0,0,0,.75);
+      padding: 10px 10px;
+      box-shadow: 0 8px 0 rgba(0,0,0,.40);
+      font-size: 9px;
+      letter-spacing:.12em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
   </style>
 </head>
 
@@ -658,6 +719,7 @@
           <div class="tab active" id="tabGen">Generator</div>
           <div class="tab" id="tabRank">Rank</div>
           <div class="tab" id="tabCards">Com Cards</div>
+          <div class="tab" id="tabMarket">Market</div>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -736,7 +798,6 @@
 
         <div class="boardHeader">
           <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            <!-- CUSTOM PIXEL DROPDOWN -->
             <div class="dd" id="cardsSortDD">
               <button class="ddBtn" id="cardsSortBtn" type="button">
                 <span id="cardsSortLabel">TRENDING</span>
@@ -779,6 +840,80 @@
 
         <div style="max-width:980px; margin:14px auto 0; text-align:center;">
           <button class="btn" id="btnBackToCards">Back to Com Cards</button>
+        </div>
+      </div>
+
+      <!-- COM CARDS MARKET (INFO PAGE) -->
+      <div class="stage px-border hidden" id="viewMarket">
+        <div class="bigTitle">COM CARDS MARKET</div>
+
+        <p class="sub">
+          NEW YEAR UPGRADE INCOMING. THIS PAGE IS THE BLUEPRINT. THE MARKET LAYER TURNS COM CARDS FROM “A DAILY MEME”
+          INTO A FULL ECONOMY WHERE <b>$COMCOIN</b> IS THE ONLY FUEL.
+        </p>
+
+        <div class="marketWrap px-border-soft">
+          <div class="marketTitle">What’s coming</div>
+
+          <p class="marketP">
+            The Market is built around one simple idea: <b>COM CARDS SHOULD HAVE REAL DEMAND</b> — and that demand should
+            route through <b>$COMCOIN</b>. Creating, trading, and protecting cards will be paid in <b>$COMCOIN</b>, with a
+            percentage of that revenue <b>burned</b> to push supply down over time. The goal is to turn memes into an
+            on-chain game where attention has weight.
+          </p>
+
+          <div class="marketGrid">
+            <div class="marketBox px-border">
+              <h4>Paid mint (burn-powered)</h4>
+              <p>
+                Eventually, generating a COM CARD will cost <b>$COMCOIN</b>.
+                A slice of every mint gets <b>burned</b> so the supply trends down as usage trends up.
+              </p>
+            </div>
+
+            <div class="marketBox px-border">
+              <h4>Vote-driven pricing</h4>
+              <p>
+                A card’s price won’t be “set by the owner”. It will be shaped by <b>votes + momentum</b>.
+                The more the community pushes a card, the more it becomes a target.
+              </p>
+            </div>
+
+            <div class="marketBox px-border">
+              <h4>Buyouts + burn on sales</h4>
+              <p>
+                COM CARDS are designed so <b>one wallet owns a card at a time</b>.
+                When a buy happens, a strong percentage of the sale is routed into <b>burn</b>.
+              </p>
+            </div>
+
+            <div class="marketBox px-border">
+              <h4>Protection (anti-snipe)</h4>
+              <p>
+                Owners can pay <b>$COMCOIN</b> to add buy-protection to their card.
+                That protection fee also routes a big chunk into <b>burn</b>.
+              </p>
+            </div>
+          </div>
+
+          <p class="marketP">
+            All of this is planned to be enforced by <b>smart contracts</b> — not “trust me bro” buttons.
+            The Market is meant to make memes tradable without turning the project into a rug machine.
+          </p>
+
+          <div class="marketTitle">Rarity goes nuclear</div>
+          <p class="marketP">
+            The generator will also get a probability engine: common pulls stay common, but the odds of landing a
+            <b>politician</b> or a <b>tech billionaire 😉</b> will be extremely low. If someone hits a
+            truly recognizable figure, that card can explode on its own — pure timeline gravity, no paid ads needed.
+          </p>
+
+          <div class="tagPill">VISION: MEMES → MARKET → BURNS → ON-CHAIN CULTURE</div>
+
+          <p class="marketP" style="margin-top:14px;">
+            <b>Note:</b> This is a roadmap page (not live trading yet). Nothing here is a promise of price or returns —
+            it’s the direction: more utility, more reasons to use $COMCOIN, more reasons to keep the economy moving.
+          </p>
         </div>
       </div>
 

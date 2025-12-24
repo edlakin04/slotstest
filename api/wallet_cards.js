@@ -1,41 +1,36 @@
-import { j, sql, requireEnv, supabase } from "./_lib.js";
+import { j, requireEnv, sql } from "./_lib.js";
 
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
-    requireEnv("SUPABASE_BUCKET");
-    requireEnv("SUPABASE_URL");
-    requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const wallet = url.searchParams.get("wallet");
+    if (req.method !== "GET") return j(res, 405, { error: "Method not allowed" });
+
+    const wallet = String(req.query?.wallet || "").trim();
+    const limit = Math.min(Math.max(Number(req.query?.limit || 100), 1), 100);
+
     if (!wallet) return j(res, 400, { error: "Missing wallet" });
 
-    const limit = Math.min(Number(url.searchParams.get("limit") || 100), 100);
-
     const rows = await sql`
-      select id, owner_wallet, name, image_url, created_at, upvotes, downvotes,
-             (upvotes - downvotes) as score
+      select id, owner_wallet, name, upvotes, downvotes, created_at
       from com_cards
       where owner_wallet = ${wallet}
       order by created_at desc
       limit ${limit}
     `;
 
-    const bucket = process.env.SUPABASE_BUCKET;
+    const items = (rows || []).map((r) => ({
+      id: r.id,
+      owner_wallet: r.owner_wallet,
+      name: r.name,
+      upvotes: Number(r.upvotes || 0),
+      downvotes: Number(r.downvotes || 0),
+      score: Number(r.upvotes || 0) - Number(r.downvotes || 0),
+      created_at: r.created_at,
+      imageUrl: `/api/image?id=${encodeURIComponent(r.id)}`,
+    }));
 
-    const items = [];
-    for (const r of rows) {
-      const path = r.image_url;
-      const { data: signed, error: signErr } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(path, 60 * 60);
-
-      if (signErr) items.push({ ...r, imageUrl: null });
-      else items.push({ ...r, imageUrl: signed.signedUrl });
-    }
-
-    return j(res, 200, { ok: true, wallet, items });
+    return j(res, 200, { ok: true, items });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });
   }

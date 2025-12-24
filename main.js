@@ -71,6 +71,11 @@ const cardVotesList = document.getElementById("cardVotesList");
 const cardChart = document.getElementById("cardChart");
 const cardMsg = document.getElementById("cardMsg");
 
+/* ---------- NEW: detail page voting elements (safe if missing) ---------- */
+const btnCardVoteUp = document.getElementById("btnCardVoteUp");
+const btnCardVoteDown = document.getElementById("btnCardVoteDown");
+const cardVoteStatusPill = document.getElementById("cardVoteStatusPill");
+
 /* ---------- state ---------- */
 let publicKeyBase58 = null;
 let lastImageSrc = null;
@@ -88,6 +93,9 @@ const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)"
 /* Card details live polling */
 let currentCardId = null;
 let cardPollTimer = null;
+
+/* ---------- NEW: prevent stale details overwriting ---------- */
+let cardDetailsReqToken = 0;
 
 /* ---------- ranks ---------- */
 const RANKS = [
@@ -132,6 +140,15 @@ function setActiveCardsMessage(text = "", kind = "") {
   const mineVisible = cardsMineWrap && !cardsMineWrap.classList.contains("hidden");
   if (inCardsView && mineVisible) setMyCardsMsg(text, kind);
   else setCardsMsg(text, kind);
+}
+
+/* ---------- NEW: detail page message helper ---------- */
+function setCardMsg(text = "", kind = "") {
+  if (!cardMsg) return;
+  cardMsg.classList.remove("ok", "bad");
+  if (kind === "ok") cardMsg.classList.add("ok");
+  if (kind === "bad") cardMsg.classList.add("bad");
+  cardMsg.textContent = text;
 }
 
 function setCardsBigTitleText(t) {
@@ -245,6 +262,17 @@ async function waitForImagesIn(container) {
       img.addEventListener("error", done, { once: true });
     });
   }));
+}
+
+/* ---------- NEW: wait for a single image ---------- */
+function waitForImage(imgEl) {
+  if (!imgEl) return Promise.resolve();
+  if (imgEl.complete && imgEl.naturalWidth > 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => resolve();
+    imgEl.addEventListener("load", done, { once: true });
+    imgEl.addEventListener("error", done, { once: true });
+  });
 }
 
 function escapeHtml(s) {
@@ -701,7 +729,13 @@ async function voteCard(cardId, vote, pillEl) {
       return;
     }
 
-    setActiveCardsMessage("SIGN TO VOTE…", "");
+    // if on details page, show the message there too
+    if (viewCard && !viewCard.classList.contains("hidden")) {
+      setCardMsg("SIGN TO VOTE…", "");
+      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "SIGNING…";
+    } else {
+      setActiveCardsMessage("SIGN TO VOTE…", "");
+    }
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
@@ -729,14 +763,31 @@ async function voteCard(cardId, vote, pillEl) {
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
     updateCachesAfterVote(cardId, up, down);
-    setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
+
+    if (viewCard && !viewCard.classList.contains("hidden")) {
+      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE LOCKED (TODAY)";
+      setCardMsg(VOTE_RULE_TEXT, "ok");
+    } else {
+      setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
+    }
 
     // if viewing this card details, refresh it soon
     if (currentCardId && currentCardId === cardId) {
       setTimeout(() => loadCardDetails(cardId, { silent: true }), 800);
     }
   } catch (e) {
-    setActiveCardsMessage(String(e.message || e), "bad");
+    const raw = String(e.message || e);
+    const nicer =
+      raw.toLowerCase().includes("replay") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
+      raw.toLowerCase().includes("limit") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
+      raw;
+
+    if (viewCard && !viewCard.classList.contains("hidden")) {
+      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "1 VOTE / DAY";
+      setCardMsg(nicer, "bad");
+    } else {
+      setActiveCardsMessage(nicer, "bad");
+    }
   }
 }
 
@@ -903,12 +954,37 @@ function startCardPolling(cardId) {
 }
 
 async function openCardDetails(cardId) {
+  // NEW: bump token so stale requests can’t overwrite
+  const myToken = ++cardDetailsReqToken;
   currentCardId = cardId;
+
+  // NEW: clear stale UI immediately
   showView("card");
-  if (cardMsg) { cardMsg.className = "msg"; cardMsg.textContent = "LOADING CARD DETAILS…"; }
-  await loadCardDetails(cardId, { silent: true });
+  if (cardTitle) cardTitle.textContent = "LOADING…";
+  if (cardMeta) cardMeta.innerHTML = "—";
+  if (cardScorePill) cardScorePill.textContent = "SCORE: —";
+  if (cardCreatedPill) cardCreatedPill.textContent = "CREATED: —";
+  if (cardVotesList) cardVotesList.innerHTML = "";
+  if (cardImg) {
+    cardImg.removeAttribute("src");
+    cardImg.style.visibility = "hidden";
+  }
+  if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+  setCardMsg("LOADING CARD DETAILS…", "");
+
+  await loadCardDetails(cardId, { silent: true, token: myToken });
   startCardPolling(cardId);
 }
+
+/* NEW: wire detail vote buttons (if present) */
+btnCardVoteUp && (btnCardVoteUp.onclick = async () => {
+  if (!currentCardId) return;
+  await voteCard(currentCardId, +1, cardScorePill);
+});
+btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
+  if (!currentCardId) return;
+  await voteCard(currentCardId, -1, cardScorePill);
+});
 
 function drawNetChart(canvas, series) {
   if (!canvas) return;
@@ -978,9 +1054,12 @@ function drawNetChart(canvas, series) {
   ctx.fillRect(lx-4, ly-4, 8, 8);
 }
 
-async function loadCardDetails(cardId, { silent = true } = {}) {
+async function loadCardDetails(cardId, { silent = true, token = null } = {}) {
+  // If caller didn’t pass a token, use current global value
+  const myToken = token ?? cardDetailsReqToken;
+
   try {
-    if (!silent && cardMsg) cardMsg.textContent = "LOADING CARD DETAILS…";
+    if (!silent) setCardMsg("LOADING CARD DETAILS…", "");
 
     const res = await fetch(`/api/card_details?id=${encodeURIComponent(cardId)}`);
     const text = await res.text();
@@ -989,12 +1068,21 @@ async function loadCardDetails(cardId, { silent = true } = {}) {
 
     if (!res.ok) throw new Error(data?.error || text || "FAILED TO LOAD DETAILS");
 
+    // NEW: ignore stale response if user clicked another card
+    if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
+
     const c = data.card;
     const votes = data.lastVotes || [];
     const series = data.netSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
-    if (cardImg) cardImg.src = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+
+    // NEW: set image, but keep hidden until actually loaded
+    if (cardImg) {
+      cardImg.style.visibility = "hidden";
+      const url = `${c.imageUrl}${c.imageUrl.includes("?") ? "&" : "?"}v=${Date.now()}`;
+      cardImg.src = url;
+    }
 
     if (cardScorePill) cardScorePill.textContent = `SCORE: ${c.score}  (▲${c.upvotes} ▼${c.downvotes})`;
     if (cardCreatedPill) cardCreatedPill.textContent = `CREATED: ${fmtDate(c.created_at)}`;
@@ -1007,13 +1095,14 @@ async function loadCardDetails(cardId, { silent = true } = {}) {
         `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
         `CREATED: ${escapeHtml(fmtTime(c.created_at))}<br/>` +
-        `VIEW: LAST 50 VOTES + LIVE NET GRAPH`;
+        `VIEW: LAST 50 VOTES + LIVE NET GRAPH<br/>` +
+        `<span style="color:rgba(233,255,241,.80)">${escapeHtml(VOTE_RULE_TEXT)}</span>`;
       cardMeta.querySelector("#cdOwner")?.addEventListener("click", async () => {
         await openWalletPage(ownerFull);
       });
       cardMeta.querySelector("#cdId")?.addEventListener("click", async () => {
         await navigator.clipboard.writeText(String(c.id));
-        if (cardMsg) cardMsg.textContent = "CARD ID COPIED.";
+        setCardMsg("CARD ID COPIED.", "ok");
       });
     }
 
@@ -1047,15 +1136,22 @@ async function loadCardDetails(cardId, { silent = true } = {}) {
     // chart
     drawNetChart(cardChart, series);
 
-    if (cardMsg) {
-      cardMsg.className = "msg ok";
-      cardMsg.textContent = "LIVE UPDATES ON • LAST 50 VOTES";
+    // NEW: wait for the image before showing “loaded”
+    if (cardImg) {
+      await waitForImage(cardImg);
+
+      // ignore if stale while waiting for img
+      if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
+
+      cardImg.style.visibility = "visible";
     }
+
+    setCardMsg("LIVE UPDATES ON • LAST 50 VOTES", "ok");
   } catch (e) {
-    if (cardMsg) {
-      cardMsg.className = "msg bad";
-      cardMsg.textContent = String(e.message || e);
-    }
+    // ignore errors from stale calls
+    if (myToken !== cardDetailsReqToken) return;
+
+    setCardMsg(String(e.message || e), "bad");
   }
 }
 

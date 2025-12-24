@@ -721,6 +721,11 @@ function updateCachesAfterVote(cardId, up, down) {
   }
 }
 
+/* IMPORTANT CHANGE:
+   - Details page voting uses EXACT same endpoint + message format
+   - We do NOT refresh the image after voting
+   - We show nicer “vote used today” messages
+*/
 async function voteCard(cardId, vote, pillEl) {
   const onDetails = viewCard && !viewCard.classList.contains("hidden");
 
@@ -741,6 +746,8 @@ async function voteCard(cardId, vote, pillEl) {
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
+
+    // MUST match server expectations
     const message = `COM COIN vote | ${cardId} | ${vote} | ${today}`;
 
     const encoded = new TextEncoder().encode(message);
@@ -768,11 +775,11 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
-      setCardMsg(VOTE_RULE_TEXT, "ok");
+      setCardMsg("VOTE LOCKED FOR TODAY.", "ok");
 
-      // IMPORTANT: refresh details WITHOUT refreshing image
+      // Refresh details BUT DO NOT refresh image
       if (currentCardId && currentCardId === cardId) {
-        setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 400);
+        setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 450);
       }
     } else {
       setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
@@ -780,6 +787,8 @@ async function voteCard(cardId, vote, pillEl) {
   } catch (e) {
     const raw = String(e.message || e);
     const nicer =
+      raw.toLowerCase().includes("already voted") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
+      raw.toLowerCase().includes("duplicate") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw.toLowerCase().includes("replay") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw.toLowerCase().includes("limit") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw;
@@ -957,9 +966,12 @@ async function openCardDetails(cardId) {
   const myToken = ++cardDetailsReqToken;
   currentCardId = cardId;
 
-  currentCardImageBase = null; // reset for first load of a new card
+  // reset image base so first load sets it
+  currentCardImageBase = null;
 
   showView("card");
+
+  // hard reset UI to stop “old card flashes”
   if (cardTitle) cardTitle.textContent = "LOADING…";
   if (cardMeta) cardMeta.innerHTML = "—";
   if (cardScorePill) cardScorePill.textContent = "SCORE: —";
@@ -969,8 +981,12 @@ async function openCardDetails(cardId) {
     cardImg.removeAttribute("src");
     cardImg.style.visibility = "hidden";
   }
-  if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-  setCardMsg(VOTE_RULE_TEXT, "");
+
+  if (cardVoteStatusPill) {
+    cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+  }
+
+  setCardMsg("LOADING COM CARD…", "");
 
   await loadCardDetails(cardId, { silent: true, token: myToken, forceImage: true });
   startCardPolling(cardId);
@@ -1046,7 +1062,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
   const myToken = token ?? cardDetailsReqToken;
 
   try {
-    if (!silent) setCardMsg("LOADING CARD DETAILS…", "");
+    if (!silent) setCardMsg("LOADING COM CARD…", "");
 
     const res = await fetch(`/api/card_details?id=${encodeURIComponent(cardId)}`);
     const text = await res.text();
@@ -1062,7 +1078,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
 
-    // IMPORTANT: do NOT refresh image unless forceImage==true or the base changes
+    // IMPORTANT: do NOT refresh image on poll updates
     if (cardImg) {
       const base = c.imageUrl;
       const shouldSet = forceImage || !currentCardImageBase || (currentCardImageBase !== base);
@@ -1070,7 +1086,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       if (shouldSet) {
         currentCardImageBase = base;
         cardImg.style.visibility = "hidden";
-        cardImg.src = base; // NO cache-buster here (signed URL already unique enough)
+        cardImg.src = base;
         await waitForImage(cardImg);
         if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
         cardImg.style.visibility = "visible";
@@ -1088,7 +1104,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
         `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
         `CREATED: ${escapeHtml(fmtTime(c.created_at))}<br/>` +
-        `<span style="color:rgba(233,255,241,.80)">${escapeHtml(VOTE_RULE_TEXT)}</span>`;
+        `VIEW: LAST 50 VOTES + LIVE NET GRAPH`;
       cardMeta.querySelector("#cdOwner")?.addEventListener("click", async () => {
         await openWalletPage(ownerFull);
       });
@@ -1125,9 +1141,9 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     drawNetChart(cardChart, series);
 
-    // keep rule visible (don’t replace it with “live updates”)
-    setCardMsg(VOTE_RULE_TEXT, "ok");
+    // NOTE: we do NOT show the whole rule text here, but we do show a clean status
     if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+    setCardMsg("LIVE • LAST 50 VOTES", "ok");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");

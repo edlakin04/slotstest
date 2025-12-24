@@ -30,7 +30,7 @@ const cardMetaMini = document.getElementById("cardMetaMini");
 const rankBig = document.getElementById("rankBig");
 const rankCallout = document.getElementById("rankCallout");
 
-// (kept in DOM but unused)
+// kept but unused
 const rankCardsMsg = document.getElementById("rankCardsMsg");
 const rankMiniGrid = document.getElementById("rankMiniGrid");
 
@@ -112,6 +112,15 @@ function setMyCardsMsg(text = "", kind = "") {
   if (kind === "ok") myCardsMsg.classList.add("ok");
   if (kind === "bad") myCardsMsg.classList.add("bad");
   myCardsMsg.textContent = text;
+}
+
+// ✅ NEW: route vote messages to the visible section (board vs my cards)
+function setActiveCardsMessage(text = "", kind = "") {
+  const inCardsView = viewCards && !viewCards.classList.contains("hidden");
+  const mineVisible = cardsMineWrap && !cardsMineWrap.classList.contains("hidden");
+
+  if (inCardsView && mineVisible) setMyCardsMsg(text, kind);
+  else setCardsMsg(text, kind);
 }
 
 function setCardsBigTitleText(t) {
@@ -244,7 +253,6 @@ tabRank && (tabRank.onclick = async () => {
 tabCards && (tabCards.onclick = async () => {
   showView("cards");
   openCardsSection("board");
-  // prefetch my cards in background so switching is instant
   prefetchMyCards();
   await showBoardFromCacheOrLoad();
 });
@@ -265,7 +273,6 @@ cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
   setSort(val);
   toggleSortMenu(false);
 
-  // Title stays COM CARDS (not TRENDING/TOP/NEWEST)
   setCardsBigTitleText("COM CARDS");
 
   openCardsSection("board");
@@ -292,12 +299,12 @@ function openCardsSection(which) {
     setCardsMsg(VOTE_RULE_TEXT, "");
   } else {
     setCardsBigTitleText("MY COM CARDS");
+    setMyCardsMsg("", "");
   }
 }
 
 btnCardsBoard && (btnCardsBoard.onclick = async () => {
   openCardsSection("board");
-  // prefetch mine in background again
   prefetchMyCards();
   await showBoardFromCacheOrLoad();
 });
@@ -324,7 +331,6 @@ async function connectPhantom(opts) {
   setConnectedUI(true);
   await refreshBalanceAndRank();
 
-  // ✅ IMPORTANT: prefetch my cards in background right after connect
   prefetchMyCards();
 }
 
@@ -395,7 +401,6 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
         : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
   }
 
-  // gate (set to >=0 for testing if you want)
   const eligible = amt >= 0;
   if (btnGenerate) btnGenerate.disabled = !eligible;
 
@@ -444,13 +449,9 @@ btnGenerate && (btnGenerate.onclick = async () => {
     const urlFromApi = data?.imageUrl || data?.image_url || null;
 
     let imgSrc = null;
-    if (urlFromApi) {
-      imgSrc = `${urlFromApi}${urlFromApi.includes("?") ? "&" : "?"}v=${Date.now()}`;
-    } else if (data?.image_b64) {
-      imgSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
-    } else if (data?.b64_json) {
-      imgSrc = `data:image/png;base64,${data.b64_json}`;
-    }
+    if (urlFromApi) imgSrc = `${urlFromApi}${urlFromApi.includes("?") ? "&" : "?"}v=${Date.now()}`;
+    else if (data?.image_b64) imgSrc = `data:${data.mime || "image/png"};base64,${data.image_b64}`;
+    else if (data?.b64_json) imgSrc = `data:image/png;base64,${data.b64_json}`;
 
     if (!imgSrc) throw new Error("NO IMAGE DATA RETURNED");
 
@@ -481,7 +482,6 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
-    // invalidate my cards cache and prefetch again
     if (publicKeyBase58) walletCardsCache.delete(publicKeyBase58);
     prefetchMyCards();
 
@@ -565,7 +565,6 @@ async function loadBoard(sort) {
     }
 
     renderCards(cardsGrid, items, { showWalletLink: true });
-
     await waitForImagesIn(cardsGrid);
 
     if (!viewCards?.classList.contains("hidden") && !cardsBoardWrap?.classList.contains("hidden")) {
@@ -599,7 +598,7 @@ async function searchById(cardId) {
   }
 }
 
-/* ---------------- MY COM CARDS (prefetch + faster feel) ---------------- */
+/* ---------------- MY COM CARDS ---------------- */
 
 function inflightKeyMy(wallet){ return `my:${wallet}`; }
 
@@ -640,12 +639,11 @@ async function showMyCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
     return;
   }
 
-  // Always make title correct here
   setCardsBigTitleText("MY COM CARDS");
 
   const cached = walletCardsCache.get(publicKeyBase58);
   if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
-    setMyCardsMsg(`MY COM CARDS: ${cached.items.length}`, "ok");
+    setMyCardsMsg(`${VOTE_RULE_TEXT}  •  MY COM CARDS: ${cached.items.length}`, "ok");
     renderCards(myCardsGrid, cached.items, { showWalletLink: false });
     return;
   }
@@ -673,12 +671,10 @@ async function loadMyCards(wallet) {
       return;
     }
 
-    // render immediately
     renderCards(myCardsGrid, items, { showWalletLink: false });
-
-    // wait for images then swap msg
     await waitForImagesIn(myCardsGrid);
-    setMyCardsMsg(`MY COM CARDS: ${items.length}`, "ok");
+
+    setMyCardsMsg(`${VOTE_RULE_TEXT}  •  MY COM CARDS: ${items.length}`, "ok");
   } catch (e) {
     setMyCardsMsg(String(e.message || e), "bad");
   }
@@ -686,15 +682,53 @@ async function loadMyCards(wallet) {
 
 /* ---------------- Voting ---------------- */
 
+function updateCachesAfterVote(cardId, up, down) {
+  const score = up - down;
+
+  // update board cache
+  const entry = boardCache.get(currentSort);
+  if (entry?.items?.length) {
+    for (const it of entry.items) {
+      const id = it.id || it.cardId;
+      if (id === cardId) {
+        it.upvotes = up;
+        it.downvotes = down;
+        it.score = score;
+        break;
+      }
+    }
+    entry.ts = Date.now();
+    boardCache.set(currentSort, entry);
+  }
+
+  // ✅ update my-cards cache (so MY COM CARDS updates instantly too)
+  if (publicKeyBase58) {
+    const mine = walletCardsCache.get(publicKeyBase58);
+    if (mine?.items?.length) {
+      for (const it of mine.items) {
+        const id = it.id || it.cardId;
+        if (id === cardId) {
+          it.upvotes = up;
+          it.downvotes = down;
+          it.score = score;
+          break;
+        }
+      }
+      mine.ts = Date.now();
+      walletCardsCache.set(publicKeyBase58, mine);
+    }
+  }
+}
+
 async function voteCard(cardId, vote, pillEl) {
   try {
     if (!publicKeyBase58) {
-      setCardsMsg("CONNECT WALLET TO VOTE.", "bad");
+      setActiveCardsMessage("CONNECT WALLET TO VOTE.", "bad");
       showView("gen");
       return;
     }
 
-    setCardsMsg("SIGN TO VOTE…", "");
+    setActiveCardsMessage("SIGN TO VOTE…", "");
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
@@ -722,25 +756,11 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
-    // update cached board counts
-    const entry = boardCache.get(currentSort);
-    if (entry?.items?.length) {
-      for (const it of entry.items) {
-        const id = it.id || it.cardId;
-        if (id === cardId) {
-          it.upvotes = up;
-          it.downvotes = down;
-          it.score = score;
-          break;
-        }
-      }
-      entry.ts = Date.now();
-      boardCache.set(currentSort, entry);
-    }
+    updateCachesAfterVote(cardId, up, down);
 
-    setCardsMsg(VOTE_RULE_TEXT, "ok");
+    setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
   } catch (e) {
-    setCardsMsg(String(e.message || e), "bad");
+    setActiveCardsMessage(String(e.message || e), "bad");
   }
 }
 
@@ -800,6 +820,7 @@ function renderCards(container, items, opts = {}) {
     meta.querySelector("#owner-holder")?.replaceWith(ownerSpan);
     card.appendChild(meta);
 
+    // ✅ Voting row ALWAYS included (board + my cards)
     const voteRow = document.createElement("div");
     voteRow.className = "voteRow";
 

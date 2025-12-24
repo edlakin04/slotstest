@@ -8,7 +8,7 @@ const tabMarket = document.getElementById("tabMarket");
 const viewGen = document.getElementById("viewGen");
 const viewRank = document.getElementById("viewRank");
 const viewCards = document.getElementById("viewCards");
-const viewWallet = document.getElementById("viewWallet");
+const viewWallet = document.getElementById("viewWallet"); // still used for clicking wallet IDs (profile)
 const viewMarket = document.getElementById("viewMarket");
 
 const btnConnect = document.getElementById("btnConnect");
@@ -29,6 +29,8 @@ const cardMetaMini = document.getElementById("cardMetaMini");
 
 const rankBig = document.getElementById("rankBig");
 const rankCallout = document.getElementById("rankCallout");
+
+// ✅ Rank page no longer loads cards:
 const rankCardsMsg = document.getElementById("rankCardsMsg");
 const rankMiniGrid = document.getElementById("rankMiniGrid");
 
@@ -37,15 +39,15 @@ const cardsMsg = document.getElementById("cardsMsg");
 const cardsGrid = document.getElementById("cardsGrid");
 const searchCardId = document.getElementById("searchCardId");
 const btnSearchCard = document.getElementById("btnSearchCard");
-
 const cardsBigTitle = document.getElementById("cardsBigTitle");
 
-// Custom dropdown elements
+// dropdown
 const cardsSortDD = document.getElementById("cardsSortDD");
 const cardsSortBtn = document.getElementById("cardsSortBtn");
 const cardsSortMenu = document.getElementById("cardsSortMenu");
 const cardsSortLabel = document.getElementById("cardsSortLabel");
 
+// wallet profile page (click wallet IDs)
 const walletPageSub = document.getElementById("walletPageSub");
 const walletRankBig = document.getElementById("walletRankBig");
 const walletRankCallout = document.getElementById("walletRankCallout");
@@ -53,20 +55,27 @@ const walletCardsMsg = document.getElementById("walletCardsMsg");
 const walletCardsGrid = document.getElementById("walletCardsGrid");
 const btnBackToCards = document.getElementById("btnBackToCards");
 
+// ✅ NEW: Com Cards page "Board / My Cards"
+const btnCardsBoard = document.getElementById("btnCardsBoard");
+const btnCardsMine = document.getElementById("btnCardsMine");
+const cardsBoardWrap = document.getElementById("cardsBoardWrap");
+const cardsMineWrap = document.getElementById("cardsMineWrap");
+const myCardsMsg = document.getElementById("myCardsMsg");
+const myCardsGrid = document.getElementById("myCardsGrid");
+const btnRefreshMine = document.getElementById("btnRefreshMine");
+
 let publicKeyBase58 = null;
 let lastImageSrc = null;
 
-// board sort state
 let currentSort = "trending";
 
-// ✅ VOTE RULE
+// vote rule
 const VOTE_RULE_TEXT = "RULE: 1 VOTE PER DAY PER WALLET PER CARD. (UP OR DOWN.)";
 
-// ✅ SESSION CACHE (in-memory)
-const CACHE_TTL_MS = 30_000; // 30s freshness window
-const boardCache = new Map(); // key: sort -> { items, ts }
-const walletCardsCache = new Map(); // key: wallet -> { items, ts }
-let myRankCardsCache = { items: null, ts: 0 }; // for rank mini grid
+// caches (session)
+const CACHE_TTL_MS = 30_000;
+const boardCache = new Map();      // sort -> { items, ts }
+const walletCardsCache = new Map(); // wallet -> { items, ts }
 
 const RANKS = [
   { name: "Dust", min: 0 },
@@ -76,7 +85,11 @@ const RANKS = [
   { name: "Whale", min: 100_000 }
 ];
 
-/* ---------------- UI helpers ---------------- */
+/* ---------------- helpers ---------------- */
+
+function cacheFresh(entry) {
+  return !!entry && (Date.now() - entry.ts) < CACHE_TTL_MS;
+}
 
 function setMsg(text = "", kind = "") {
   if (!elMsg) return;
@@ -94,15 +107,23 @@ function setCardsMsg(text = "", kind = "") {
   cardsMsg.textContent = text;
 }
 
-function setCardsBigTitle(sort) {
-  if (!cardsBigTitle) return;
-  cardsBigTitle.textContent = (sort || "TRENDING").toUpperCase();
+function setMyCardsMsg(text = "", kind = "") {
+  if (!myCardsMsg) return;
+  myCardsMsg.classList.remove("ok", "bad");
+  if (kind === "ok") myCardsMsg.classList.add("ok");
+  if (kind === "bad") myCardsMsg.classList.add("bad");
+  myCardsMsg.textContent = text;
 }
 
 function getSortLabel(v){
   if (v === "top") return "TOP";
   if (v === "newest") return "NEWEST";
   return "TRENDING";
+}
+
+function setCardsBigTitle(title) {
+  if (!cardsBigTitle) return;
+  cardsBigTitle.textContent = (title || "TRENDING").toUpperCase();
 }
 
 function setSort(v){
@@ -137,29 +158,6 @@ function showView(which) {
   tabMarket?.classList.toggle("active", market);
 }
 
-function isMobile() {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
-}
-
-function openInPhantom() {
-  const url = window.location.href;
-  const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
-  window.location.href = deepLink;
-}
-
-function requirePhantomOrDeepLink() {
-  const p = window?.solana;
-  if (p?.isPhantom) return p;
-
-  if (isMobile()) {
-    setMsg("OPENING IN PHANTOM…", "ok");
-    openInPhantom();
-    throw new Error("Open in Phantom to connect.");
-  }
-
-  throw new Error("PHANTOM WALLET NOT FOUND");
-}
-
 function setConnectedUI(connected) {
   if (btnConnect) btnConnect.disabled = connected;
   if (btnDisconnect) btnDisconnect.disabled = !connected;
@@ -192,106 +190,71 @@ function fmtTime(ts) {
   }
 }
 
-function cacheFresh(entry) {
-  if (!entry) return false;
-  return (Date.now() - entry.ts) < CACHE_TTL_MS;
+function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || "");
 }
 
-/* ---------------- Inline “LOADING COM CARDS…” placeholders ---------------- */
+function openInPhantom() {
+  const url = window.location.href;
+  const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(url)}`;
+  window.location.href = deepLink;
+}
 
-function showGridPlaceholders(gridEl, count = 9, label = "LOADING COM CARDS…") {
-  if (!gridEl) return;
-  gridEl.innerHTML = "";
+function requirePhantomOrDeepLink() {
+  const p = window?.solana;
+  if (p?.isPhantom) return p;
 
-  for (let i = 0; i < count; i++) {
-    const card = document.createElement("div");
-    card.className = "card px-border-soft";
-    card.style.opacity = "0.95";
-
-    const box = document.createElement("div");
-    box.style.border = "4px solid rgba(180,255,210,.18)";
-    box.style.boxShadow = "0 10px 0 rgba(0,0,0,.35)";
-    box.style.background = "rgba(0,0,0,.35)";
-    box.style.height = "260px";
-    box.style.position = "relative";
-    box.style.display = "flex";
-    box.style.alignItems = "center";
-    box.style.justifyContent = "center";
-
-    const txt = document.createElement("div");
-    txt.textContent = label;
-    txt.style.fontFamily = `"Press Start 2P", monospace`;
-    txt.style.fontSize = "10px";
-    txt.style.letterSpacing = ".12em";
-    txt.style.textTransform = "uppercase";
-    txt.style.color = "#C8FF00";
-    txt.style.textShadow = "0 10px 0 rgba(0,0,0,.45)";
-    txt.style.textAlign = "center";
-    txt.style.padding = "0 10px";
-    txt.style.lineHeight = "1.8";
-    txt.style.animation = "pxPulse 0.9s ease-in-out infinite";
-
-    box.appendChild(txt);
-    card.appendChild(box);
-
-    const meta = document.createElement("div");
-    meta.className = "cardMeta";
-    meta.textContent = "…";
-    card.appendChild(meta);
-
-    gridEl.appendChild(card);
+  if (isMobile()) {
+    setMsg("OPENING IN PHANTOM…", "ok");
+    openInPhantom();
+    throw new Error("Open in Phantom to connect.");
   }
-
-  injectPulseKeyframesOnce();
+  throw new Error("PHANTOM WALLET NOT FOUND");
 }
 
-function showMiniPlaceholders(miniEl, count = 12, label = "LOADING") {
-  if (!miniEl) return;
-  miniEl.innerHTML = "";
+async function waitForImagesIn(container) {
+  if (!container) return;
+  const imgs = Array.from(container.querySelectorAll("img"));
+  if (!imgs.length) return;
 
-  for (let i = 0; i < count; i++) {
-    const tile = document.createElement("div");
-    tile.style.border = "4px solid rgba(180,255,210,.18)";
-    tile.style.boxShadow = "0 8px 0 rgba(0,0,0,.30)";
-    tile.style.background = "rgba(0,0,0,.35)";
-    tile.style.height = "70px";
-    tile.style.display = "flex";
-    tile.style.alignItems = "center";
-    tile.style.justifyContent = "center";
-    tile.style.cursor = "default";
-
-    const txt = document.createElement("div");
-    txt.textContent = label;
-    txt.style.fontFamily = `"Press Start 2P", monospace`;
-    txt.style.fontSize = "8px";
-    txt.style.letterSpacing = ".12em";
-    txt.style.textTransform = "uppercase";
-    txt.style.color = "#C8FF00";
-    txt.style.textShadow = "0 8px 0 rgba(0,0,0,.45)";
-    txt.style.animation = "pxPulse 0.9s ease-in-out infinite";
-    txt.style.textAlign = "center";
-
-    tile.appendChild(txt);
-    miniEl.appendChild(tile);
-  }
-
-  injectPulseKeyframesOnce();
+  await Promise.allSettled(imgs.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => resolve();
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", done, { once: true });
+    });
+  }));
 }
 
-function injectPulseKeyframesOnce() {
-  if (document.getElementById("_pxPulseStyle")) return;
-  const style = document.createElement("style");
-  style.id = "_pxPulseStyle";
-  style.textContent = `
-    @keyframes pxPulse {
-      0%,100% { transform: translateY(0); opacity: .65; }
-      50% { transform: translateY(-1px); opacity: 1; }
-    }
-  `;
-  document.head.appendChild(style);
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-/* ---------------- Pixel dropdown wiring ---------------- */
+/* ---------------- tabs ---------------- */
+
+tabGen && (tabGen.onclick = () => showView("gen"));
+
+tabRank && (tabRank.onclick = async () => {
+  showView("rank");
+  // rank page no longer fetches cards
+});
+
+tabCards && (tabCards.onclick = async () => {
+  showView("cards");
+  setSort(currentSort);
+  openCardsSection("board");
+  await showBoardFromCacheOrLoad();
+});
+
+tabMarket && (tabMarket.onclick = () => showView("market"));
+
+/* ---------------- dropdown ---------------- */
 
 cardsSortBtn && (cardsSortBtn.onclick = (e) => {
   e.preventDefault();
@@ -304,7 +267,9 @@ cardsSortMenu && cardsSortMenu.addEventListener("click", async (e) => {
   const val = btn.getAttribute("data-value");
   setSort(val);
   toggleSortMenu(false);
-  await showCardsFromCacheOrLoad();
+
+  openCardsSection("board");
+  await showBoardFromCacheOrLoad();
 });
 
 document.addEventListener("click", (e) => {
@@ -312,27 +277,36 @@ document.addEventListener("click", (e) => {
   if (!cardsSortDD.contains(e.target)) toggleSortMenu(false);
 });
 
-/* ---------------- Tabs ---------------- */
+/* ---------------- Cards page sub-tabs (Board / My Cards) ---------------- */
 
-tabGen && (tabGen.onclick = () => showView("gen"));
+function openCardsSection(which) {
+  const isBoard = which === "board";
+  cardsBoardWrap?.classList.toggle("hidden", !isBoard);
+  cardsMineWrap?.classList.toggle("hidden", isBoard);
 
-tabRank && (tabRank.onclick = async () => {
-  showView("rank");
-  await loadRankCards({ preferCache: true });
+  btnCardsBoard?.classList.toggle("active", isBoard);
+  btnCardsMine?.classList.toggle("active", !isBoard);
+
+  // message bar
+  if (isBoard) setCardsMsg(VOTE_RULE_TEXT, "");
+}
+
+btnCardsBoard && (btnCardsBoard.onclick = async () => {
+  openCardsSection("board");
+  await showBoardFromCacheOrLoad();
 });
 
-tabCards && (tabCards.onclick = async () => {
-  showView("cards");
-  setSort(currentSort);
-  setCardsMsg(VOTE_RULE_TEXT, "");
-  await showCardsFromCacheOrLoad();
+btnCardsMine && (btnCardsMine.onclick = async () => {
+  openCardsSection("mine");
+  await showMyCardsFromCacheOrLoad();
 });
 
-tabMarket && (tabMarket.onclick = () => {
-  showView("market");
+btnRefreshMine && (btnRefreshMine.onclick = async () => {
+  if (publicKeyBase58) walletCardsCache.delete(publicKeyBase58);
+  await showMyCardsFromCacheOrLoad({ forceNetwork: true });
 });
 
-/* ---------------- Wallet ---------------- */
+/* ---------------- wallet connect ---------------- */
 
 async function connectPhantom(opts) {
   const provider = requirePhantomOrDeepLink();
@@ -342,15 +316,15 @@ async function connectPhantom(opts) {
   setConnectedUI(true);
   await refreshBalanceAndRank();
 
-  if (!viewRank?.classList.contains("hidden")) await loadRankCards({ preferCache: true });
+  // if user is on "My Cards" section, warm it
+  if (!viewCards?.classList.contains("hidden") && !cardsMineWrap?.classList.contains("hidden")) {
+    await showMyCardsFromCacheOrLoad();
+  }
 }
 
 btnConnect && (btnConnect.onclick = async () => {
-  try {
-    await connectPhantom();
-  } catch (e) {
-    setMsg(e.message, "bad");
-  }
+  try { await connectPhantom(); }
+  catch (e) { setMsg(e.message, "bad"); }
 });
 
 btnDisconnect && (btnDisconnect.onclick = async () => {
@@ -366,22 +340,23 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   if (outWrap) outWrap.style.display = "none";
   if (outImg) outImg.removeAttribute("src");
   lastImageSrc = null;
-
   if (cardMetaMini) cardMetaMini.style.display = "none";
+
+  // clear wallet caches only
+  walletCardsCache.clear();
+
+  // rank page cards removed
+  if (rankCardsMsg) rankCardsMsg.textContent = "";
+  if (rankMiniGrid) rankMiniGrid.innerHTML = "";
 
   setConnectedUI(false);
   setMsg("");
-
-  if (rankCardsMsg) rankCardsMsg.textContent = "CONNECT TO LOAD YOUR COM CARDS.";
-  if (rankMiniGrid) rankMiniGrid.innerHTML = "";
-
-  walletCardsCache.clear();
-  myRankCardsCache = { items: null, ts: 0 };
-
   setCardsMsg(VOTE_RULE_TEXT, "");
+  setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");
+  if (myCardsGrid) myCardsGrid.innerHTML = "";
 });
 
-/* ---------------- Balance + Rank ---------------- */
+/* ---------------- balance & rank ---------------- */
 
 async function refreshBalanceAndRank({ quiet = false } = {}) {
   if (!publicKeyBase58) return;
@@ -414,7 +389,8 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
         : `YOU ARE ${r.name}. NEXT: ${n ? n.name : "MAXED"}`;
   }
 
-  const eligible = amt >= 0; // set >=0 for testing if you want
+  // your existing gate (change to >=0 for testing)
+  const eligible = amt >= 0;
   if (btnGenerate) btnGenerate.disabled = !eligible;
 
   if (!quiet) {
@@ -423,9 +399,13 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
       eligible ? "ok" : ""
     );
   }
+
+  // Rank page: stop showing card stuff (optional text)
+  if (rankCardsMsg) rankCardsMsg.textContent = "";
+  if (rankMiniGrid) rankMiniGrid.innerHTML = "";
 }
 
-/* ---------------- Generate ---------------- */
+/* ---------------- generate ---------------- */
 
 btnGenerate && (btnGenerate.onclick = async () => {
   try {
@@ -475,9 +455,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
     lastImageSrc = imgSrc;
 
     if (outImg) {
-      outImg.onerror = () => {
-        setMsg("IMAGE SAVED BUT CAN’T LOAD IT. SIGNED URL FAILED.", "bad");
-      };
+      outImg.onerror = () => setMsg("IMAGE SAVED BUT CAN’T LOAD IT.", "bad");
       outImg.src = lastImageSrc;
     }
     if (outWrap) outWrap.style.display = "block";
@@ -501,15 +479,12 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     setMsg("GENERATED. SAVE IT + POST IT.", "ok");
 
-    myRankCardsCache = { items: null, ts: 0 };
+    // Invalidate only your own cards cache (so My Cards refreshes)
     if (publicKeyBase58) walletCardsCache.delete(publicKeyBase58);
 
-    if (!viewCards?.classList.contains("hidden")) {
-      boardCache.delete(currentSort);
-      await showCardsFromCacheOrLoad();
-    }
-    if (!viewRank?.classList.contains("hidden")) {
-      await loadRankCards({ preferCache: false });
+    // refresh My Cards if user is currently there
+    if (!viewCards?.classList.contains("hidden") && !cardsMineWrap?.classList.contains("hidden")) {
+      await showMyCardsFromCacheOrLoad({ forceNetwork: true });
     }
   } catch (e) {
     setMsg(String(e.message || e), "bad");
@@ -518,7 +493,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
   }
 });
 
-/* ---------------- Extras ---------------- */
+/* ---------------- extras ---------------- */
 
 btnCopyTweet && (btnCopyTweet.onclick = async () => {
   await navigator.clipboard.writeText("MY COM COIN DAILY PULL IS IN. $COMCOIN START SHILLING 🫡");
@@ -535,50 +510,40 @@ btnDownload && (btnDownload.onclick = () => {
   a.remove();
 });
 
-/* ---------------- Com Cards: cache + inline loading that stays until images load ---------------- */
+/* ---------------- COM CARDS BOARD (fast cache + single loading message) ---------------- */
 
 btnRefreshCards && (btnRefreshCards.onclick = async () => {
   boardCache.delete(currentSort);
-  await showCardsFromCacheOrLoad({ forceNetwork: true });
+  openCardsSection("board");
+  await showBoardFromCacheOrLoad({ forceNetwork: true });
 });
 
 btnSearchCard && (btnSearchCard.onclick = async () => {
   const id = (searchCardId?.value || "").trim();
   if (!id) return setCardsMsg("ENTER A CARD ID.", "bad");
+  openCardsSection("board");
   await searchById(id);
 });
 
-btnBackToCards && (btnBackToCards.onclick = async () => {
-  showView("cards");
-  setSort(currentSort);
-  setCardsMsg(VOTE_RULE_TEXT, "");
-  await showCardsFromCacheOrLoad();
-});
-
-async function showCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
+async function showBoardFromCacheOrLoad({ forceNetwork = false } = {}) {
   const cached = boardCache.get(currentSort);
 
+  // instant if cached
   if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
     setCardsMsg(VOTE_RULE_TEXT, "");
-    renderCards(cardsGrid, cached.items, { showWalletLink: true, withPerImageLoading: true });
-
-    if ((Date.now() - cached.ts) > (CACHE_TTL_MS * 0.8)) {
-      loadBoard(currentSort, { background: true }).catch(() => {});
-    }
+    renderCards(cardsGrid, cached.items, { showWalletLink: true });
     return;
   }
 
-  await loadBoard(currentSort, { background: false });
+  await loadBoard(currentSort);
 }
 
-async function loadBoard(sort, { background = false } = {}) {
+async function loadBoard(sort) {
   try {
     if (!cardsGrid) return;
 
-    if (!background) {
-      setCardsMsg("LOADING COM CARDS…", "");
-      showGridPlaceholders(cardsGrid, 9, "LOADING COM CARDS…");
-    }
+    setCardsMsg("LOADING COM CARDS…", "");
+    cardsGrid.innerHTML = "";
 
     const res = await fetch(`/api/cards_list?sort=${encodeURIComponent(sort)}&limit=100`);
     const text = await res.text();
@@ -591,29 +556,29 @@ async function loadBoard(sort, { background = false } = {}) {
     boardCache.set(sort, { items, ts: Date.now() });
 
     if (!items.length) {
-      if (!background) {
-        cardsGrid.innerHTML = "";
-        setCardsMsg("NO COM CARDS YET. GO GENERATE ONE.", "");
-      }
+      setCardsMsg("NO COM CARDS YET. GO GENERATE ONE.", "");
       return;
     }
 
-    if (!viewCards.classList.contains("hidden")) {
-      renderCards(cardsGrid, items, { showWalletLink: true, withPerImageLoading: true });
+    // ✅ Render immediately (images can load progressively)
+    renderCards(cardsGrid, items, { showWalletLink: true });
 
-      // Keep “LOADING…” until ALL images finished, then put rule back
-      await waitForImagesIn(cardsGrid);
-      if (!viewCards.classList.contains("hidden")) setCardsMsg(VOTE_RULE_TEXT, "");
+    // ✅ Keep "LOADING..." until ALL images in the grid are loaded
+    await waitForImagesIn(cardsGrid);
+
+    // Only swap message if still on board view
+    if (!viewCards?.classList.contains("hidden") && !cardsBoardWrap?.classList.contains("hidden")) {
+      setCardsMsg(VOTE_RULE_TEXT, "");
     }
   } catch (e) {
-    if (!background) setCardsMsg(String(e.message || e), "bad");
+    setCardsMsg(String(e.message || e), "bad");
   }
 }
 
 async function searchById(cardId) {
   try {
     setCardsMsg("LOADING COM CARDS…", "");
-    showGridPlaceholders(cardsGrid, 3, "LOADING COM CARDS…");
+    if (cardsGrid) cardsGrid.innerHTML = "";
 
     const res = await fetch(`/api/card_get?id=${encodeURIComponent(cardId)}`);
     const text = await res.text();
@@ -625,11 +590,62 @@ async function searchById(cardId) {
     const item = data?.item;
     if (!item) throw new Error("NOT FOUND");
 
-    renderCards(cardsGrid, [item], { showWalletLink: true, withPerImageLoading: true });
+    renderCards(cardsGrid, [item], { showWalletLink: true });
     await waitForImagesIn(cardsGrid);
     setCardsMsg(VOTE_RULE_TEXT, "");
   } catch (e) {
     setCardsMsg(String(e.message || e), "bad");
+  }
+}
+
+/* ---------------- MY COM CARDS (in Com Cards page) ---------------- */
+
+async function showMyCardsFromCacheOrLoad({ forceNetwork = false } = {}) {
+  if (!myCardsGrid) return;
+
+  if (!publicKeyBase58) {
+    setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");
+    myCardsGrid.innerHTML = "";
+    return;
+  }
+
+  const cached = walletCardsCache.get(publicKeyBase58);
+  if (!forceNetwork && cacheFresh(cached) && Array.isArray(cached.items)) {
+    setMyCardsMsg(`MY COM CARDS: ${cached.items.length}`, "ok");
+    renderCards(myCardsGrid, cached.items, { showWalletLink: false });
+    return;
+  }
+
+  await loadMyCards(publicKeyBase58);
+}
+
+async function loadMyCards(wallet) {
+  try {
+    setMyCardsMsg("LOADING COM CARDS…", "");
+    myCardsGrid.innerHTML = "";
+
+    const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(wallet)}&limit=100`);
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch {}
+
+    if (!res.ok) throw new Error(data?.error || text || "FAILED TO LOAD MY CARDS");
+
+    const items = data?.items || [];
+    walletCardsCache.set(wallet, { items, ts: Date.now() });
+
+    if (!items.length) {
+      setMyCardsMsg("YOU HAVE NO COM CARDS YET. GO GENERATE ONE.", "");
+      return;
+    }
+
+    // render immediately, keep message until images loaded
+    renderCards(myCardsGrid, items, { showWalletLink: false });
+    await waitForImagesIn(myCardsGrid);
+
+    setMyCardsMsg(`MY COM CARDS: ${items.length}`, "ok");
+  } catch (e) {
+    setMyCardsMsg(String(e.message || e), "bad");
   }
 }
 
@@ -671,11 +687,12 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
-    // update cached board item
+    // update cached current board counts
     const entry = boardCache.get(currentSort);
     if (entry?.items?.length) {
       for (const it of entry.items) {
-        if (it.id === cardId || it.cardId === cardId) {
+        const id = it.id || it.cardId;
+        if (id === cardId) {
           it.upvotes = up;
           it.downvotes = down;
           it.score = score;
@@ -692,7 +709,7 @@ async function voteCard(cardId, vote, pillEl) {
   }
 }
 
-/* ---------------- Rendering (per-image loading until loaded) ---------------- */
+/* ---------------- render cards ---------------- */
 
 function renderCards(container, items, opts = {}) {
   if (!container) return;
@@ -702,50 +719,11 @@ function renderCards(container, items, opts = {}) {
     const card = document.createElement("div");
     card.className = "card px-border-soft";
 
-    // wrapper so we can show “LOADING COM CARDS…” INSIDE the card until image loads
-    const imgWrap = document.createElement("div");
-    imgWrap.style.position = "relative";
-
-    const loadingBadge = document.createElement("div");
-    loadingBadge.textContent = "LOADING COM CARDS…";
-    loadingBadge.style.position = "absolute";
-    loadingBadge.style.inset = "0";
-    loadingBadge.style.display = opts.withPerImageLoading ? "flex" : "none";
-    loadingBadge.style.alignItems = "center";
-    loadingBadge.style.justifyContent = "center";
-    loadingBadge.style.textAlign = "center";
-    loadingBadge.style.padding = "0 12px";
-    loadingBadge.style.fontFamily = `"Press Start 2P", monospace`;
-    loadingBadge.style.fontSize = "10px";
-    loadingBadge.style.letterSpacing = ".12em";
-    loadingBadge.style.textTransform = "uppercase";
-    loadingBadge.style.color = "#C8FF00";
-    loadingBadge.style.textShadow = "0 10px 0 rgba(0,0,0,.45)";
-    loadingBadge.style.background = "rgba(0,0,0,.35)";
-    loadingBadge.style.border = "4px solid rgba(180,255,210,.18)";
-    loadingBadge.style.boxShadow = "0 10px 0 rgba(0,0,0,.35)";
-    loadingBadge.style.animation = "pxPulse 0.9s ease-in-out infinite";
-
     const img = document.createElement("img");
     img.className = "cardImg";
     img.alt = it.name || "COM CARD";
     img.src = it.imageUrl || it.image_url || "";
-
-    if (opts.withPerImageLoading) {
-      img.style.opacity = "0";
-      img.style.transition = "opacity 120ms linear";
-      img.addEventListener("load", () => {
-        loadingBadge.style.display = "none";
-        img.style.opacity = "1";
-      }, { once: true });
-      img.addEventListener("error", () => {
-        loadingBadge.textContent = "FAILED TO LOAD";
-      }, { once: true });
-    }
-
-    imgWrap.appendChild(img);
-    imgWrap.appendChild(loadingBadge);
-    card.appendChild(imgWrap);
+    card.appendChild(img);
 
     const name = document.createElement("div");
     name.className = "cardName";
@@ -764,10 +742,9 @@ function renderCards(container, items, opts = {}) {
     const ownerSpan = document.createElement("span");
     ownerSpan.className = opts.showWalletLink ? "linkLike" : "";
     ownerSpan.textContent = shortWallet(owner);
+
     if (opts.showWalletLink) {
-      ownerSpan.onclick = async () => {
-        await openWalletPage(owner);
-      };
+      ownerSpan.onclick = async () => { await openWalletPage(owner); };
     }
 
     meta.innerHTML = `
@@ -775,16 +752,19 @@ function renderCards(container, items, opts = {}) {
       OWNER: <span id="owner-holder"></span><br/>
       DATE: ${escapeHtml(fmtTime(it.created_at || it.createdAt))}<br/>
     `;
+
     meta.querySelector('[data-card]')?.addEventListener("click", async () => {
       if (!id) return;
       showView("cards");
+      openCardsSection("board");
       if (searchCardId) searchCardId.value = id;
       await searchById(id);
     });
-    meta.querySelector("#owner-holder")?.replaceWith(ownerSpan);
 
+    meta.querySelector("#owner-holder")?.replaceWith(ownerSpan);
     card.appendChild(meta);
 
+    // voting row only on board (optional, but keep it everywhere)
     const voteRow = document.createElement("div");
     voteRow.className = "voteRow";
 
@@ -811,37 +791,25 @@ function renderCards(container, items, opts = {}) {
 
     voteRow.appendChild(pill);
     voteRow.appendChild(btns);
-
     card.appendChild(voteRow);
+
     container.appendChild(card);
   }
-
-  injectPulseKeyframesOnce();
 }
 
-async function waitForImagesIn(container) {
-  if (!container) return;
-  const imgs = Array.from(container.querySelectorAll("img"));
-  if (!imgs.length) return;
+/* ---------------- wallet profile page (click wallet IDs) ---------------- */
 
-  await Promise.allSettled(imgs.map(img => {
-    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise((resolve) => {
-      const done = () => resolve();
-      img.addEventListener("load", done, { once: true });
-      img.addEventListener("error", done, { once: true });
-    });
-  }));
-}
-
-/* ---------------- Wallet profile + rank cards (inline loading) ---------------- */
+btnBackToCards && (btnBackToCards.onclick = async () => {
+  showView("cards");
+  openCardsSection("board");
+  await showBoardFromCacheOrLoad();
+});
 
 async function openWalletPage(wallet) {
   showView("wallet");
   walletPageSub.textContent = `WALLET: ${wallet}`;
   walletCardsMsg.textContent = "LOADING COM CARDS…";
   walletCardsGrid.innerHTML = "";
-  showGridPlaceholders(walletCardsGrid, 6, "LOADING COM CARDS…");
 
   const isMe = publicKeyBase58 && wallet === publicKeyBase58;
 
@@ -855,20 +823,14 @@ async function openWalletPage(wallet) {
 
   const cached = walletCardsCache.get(wallet);
   if (cacheFresh(cached) && Array.isArray(cached.items)) {
-    renderCards(walletCardsGrid, cached.items, { showWalletLink: false, withPerImageLoading: true });
+    renderCards(walletCardsGrid, cached.items, { showWalletLink: false });
     await waitForImagesIn(walletCardsGrid);
     walletCardsMsg.textContent = cached.items.length ? `SHOWING ${cached.items.length} COM CARDS.` : "NO COM CARDS YET.";
-    if ((Date.now() - cached.ts) > (CACHE_TTL_MS * 0.8)) {
-      loadWalletCards(wallet, { background: true }).catch(() => {});
-    }
     return;
   }
 
-  await loadWalletCards(wallet, { background: false });
-}
-
-async function loadWalletCards(wallet, { background = false } = {}) {
   try {
+    walletCardsMsg.textContent = "LOADING COM CARDS…";
     const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(wallet)}&limit=100`);
     const text = await res.text();
     let data = null;
@@ -879,124 +841,15 @@ async function loadWalletCards(wallet, { background = false } = {}) {
     const items = data?.items || [];
     walletCardsCache.set(wallet, { items, ts: Date.now() });
 
-    if (!viewWallet.classList.contains("hidden")) {
-      renderCards(walletCardsGrid, items, { showWalletLink: false, withPerImageLoading: true });
-      await waitForImagesIn(walletCardsGrid);
-      walletCardsMsg.textContent = items.length ? `SHOWING ${items.length} COM CARDS.` : "NO COM CARDS YET.";
-    }
+    renderCards(walletCardsGrid, items, { showWalletLink: false });
+    await waitForImagesIn(walletCardsGrid);
+    walletCardsMsg.textContent = items.length ? `SHOWING ${items.length} COM CARDS.` : "NO COM CARDS YET.";
   } catch (e) {
-    if (!background) {
-      walletCardsGrid.innerHTML = "";
-      walletCardsMsg.textContent = String(e.message || e);
-    }
+    walletCardsMsg.textContent = String(e.message || e);
   }
 }
 
-async function loadRankCards({ preferCache = true } = {}) {
-  try {
-    if (!publicKeyBase58) {
-      if (rankCardsMsg) rankCardsMsg.textContent = "CONNECT TO LOAD YOUR COM CARDS.";
-      if (rankMiniGrid) rankMiniGrid.innerHTML = "";
-      return;
-    }
-
-    if (preferCache && cacheFresh(myRankCardsCache) && Array.isArray(myRankCardsCache.items)) {
-      renderRankMini(myRankCardsCache.items, { withLoading: false });
-      if ((Date.now() - myRankCardsCache.ts) > (CACHE_TTL_MS * 0.8)) {
-        loadRankCards({ preferCache: false }).catch(() => {});
-      }
-      return;
-    }
-
-    if (rankCardsMsg) rankCardsMsg.textContent = "LOADING COM CARDS…";
-    showMiniPlaceholders(rankMiniGrid, 18, "LOADING");
-
-    const res = await fetch(`/api/wallet_cards?wallet=${encodeURIComponent(publicKeyBase58)}&limit=100`);
-    const text = await res.text();
-    let data = null;
-    try { data = JSON.parse(text); } catch {}
-
-    if (!res.ok) throw new Error(data?.error || text || "FAILED TO LOAD");
-
-    const items = data?.items || [];
-    myRankCardsCache = { items, ts: Date.now() };
-
-    renderRankMini(items, { withLoading: true });
-    await waitForImagesIn(rankMiniGrid);
-    if (rankCardsMsg) rankCardsMsg.textContent = items.length ? `YOU HAVE ${items.length} COM CARDS.` : "NO COM CARDS YET. GO GENERATE ONE.";
-  } catch (e) {
-    if (rankCardsMsg) rankCardsMsg.textContent = String(e.message || e);
-  }
-}
-
-function renderRankMini(items, { withLoading = true } = {}) {
-  if (!rankMiniGrid || !rankCardsMsg) return;
-
-  if (!items?.length) {
-    rankCardsMsg.textContent = "NO COM CARDS YET. GO GENERATE ONE.";
-    rankMiniGrid.innerHTML = "";
-    return;
-  }
-
-  rankMiniGrid.innerHTML = "";
-
-  for (const it of items.slice(0, 24)) {
-    const wrap = document.createElement("div");
-    wrap.style.position = "relative";
-
-    const img = document.createElement("img");
-    img.className = "miniThumb";
-    img.src = it.imageUrl || it.image_url || "";
-    img.alt = it.name || "COM CARD";
-
-    const badge = document.createElement("div");
-    badge.textContent = "LOADING";
-    badge.style.position = "absolute";
-    badge.style.inset = "0";
-    badge.style.display = withLoading ? "flex" : "none";
-    badge.style.alignItems = "center";
-    badge.style.justifyContent = "center";
-    badge.style.textAlign = "center";
-    badge.style.fontFamily = `"Press Start 2P", monospace`;
-    badge.style.fontSize = "8px";
-    badge.style.letterSpacing = ".12em";
-    badge.style.textTransform = "uppercase";
-    badge.style.color = "#C8FF00";
-    badge.style.textShadow = "0 8px 0 rgba(0,0,0,.45)";
-    badge.style.background = "rgba(0,0,0,.35)";
-    badge.style.border = "4px solid rgba(180,255,210,.18)";
-    badge.style.boxShadow = "0 8px 0 rgba(0,0,0,.30)";
-    badge.style.animation = "pxPulse 0.9s ease-in-out infinite";
-
-    if (withLoading) {
-      img.style.opacity = "0";
-      img.style.transition = "opacity 120ms linear";
-      img.addEventListener("load", () => {
-        badge.style.display = "none";
-        img.style.opacity = "1";
-      }, { once: true });
-      img.addEventListener("error", () => {
-        badge.textContent = "FAIL";
-      }, { once: true });
-    }
-
-    img.onclick = async () => {
-      showView("cards");
-      if (searchCardId) searchCardId.value = it.id;
-      setSort(currentSort);
-      setCardsMsg("LOADING COM CARDS…", "");
-      await searchById(it.id);
-    };
-
-    wrap.appendChild(img);
-    wrap.appendChild(badge);
-    rankMiniGrid.appendChild(wrap);
-  }
-
-  injectPulseKeyframesOnce();
-}
-
-/* ---------------- Auto reconnect ---------------- */
+/* ---------------- auto reconnect + init ---------------- */
 
 (async function autoReconnect() {
   try {
@@ -1008,16 +861,7 @@ function renderRankMini(items, { withLoading = true } = {}) {
   }
 })();
 
-// init
 setSort(currentSort);
 showView("gen");
 setCardsMsg(VOTE_RULE_TEXT, "");
-
-function escapeHtml(s) {
-  return String(s || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");

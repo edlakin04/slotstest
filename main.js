@@ -983,7 +983,7 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* ✅ crisp canvas sizing */
+/* crisp canvas sizing */
 function resizeCanvasToDisplaySize(canvas) {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
@@ -996,7 +996,7 @@ function resizeCanvasToDisplaySize(canvas) {
   }
 }
 
-/* ✅ Normal line chart left->right */
+/* ✅ cumulative line chart */
 function drawNetChart(canvas, series) {
   if (!canvas) return;
   resizeCanvasToDisplaySize(canvas);
@@ -1016,7 +1016,7 @@ function drawNetChart(canvas, series) {
     return;
   }
 
-  const values = series.map(p => Number(p.cum || 0));
+  const values = series.map(p => Number(p.cum ?? 0));
   const minV = Math.min(...values);
   const maxV = Math.max(...values);
   const range = (maxV - minV) || 1;
@@ -1040,7 +1040,6 @@ function drawNetChart(canvas, series) {
     ctx.stroke();
   }
 
-  // x spacing
   const n = series.length;
   const denom = (n - 1) || 1;
 
@@ -1049,21 +1048,6 @@ function drawNetChart(canvas, series) {
     const y = (h - pad) - ((values[i] - minV) / range) * (h - 2*pad);
     return { x, y };
   };
-
-  // ✅ if only 1 point, draw a horizontal line across
-  if (n === 1) {
-    const { y } = xy(0);
-    ctx.strokeStyle = "rgba(200,255,0,.95)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(pad, y);
-    ctx.lineTo(w - pad, y);
-    ctx.stroke();
-
-    ctx.fillStyle = "rgba(46,229,157,.95)";
-    ctx.fillRect(w - pad - 4, y - 4, 8, 8);
-    return;
-  }
 
   // line
   ctx.strokeStyle = "rgba(200,255,0,.95)";
@@ -1164,7 +1148,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     drawNetChart(cardChart, series);
 
     if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-    if (!silent) setCardMsg("", "");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");
@@ -1184,8 +1167,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
 window.addEventListener("resize", () => {
   if (viewCard && !viewCard.classList.contains("hidden")) {
-    // redraw chart on resize if possible
-    // (loadCardDetails will redraw on next poll, but do it now for crispness)
     if (cardChart) resizeCanvasToDisplaySize(cardChart);
   }
 });

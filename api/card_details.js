@@ -18,19 +18,19 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // Last 50 vote events
+    // ✅ Recent vote events (last 50) from the CORRECT table: votes
     const votes = await sql`
       select voter_wallet, vote, created_at
-      from vote_events
+      from votes
       where card_id = ${id}
       order by created_at desc
       limit 50
     `;
 
-    // Net line graph: daily net votes (last 30 days) => cumulative
+    // ✅ Net line graph: daily net votes (last 30 days) from votes
     const seriesRows = await sql`
       select (created_at at time zone 'utc')::date as day, sum(vote)::int as net
-      from vote_events
+      from votes
       where card_id = ${id}
         and created_at >= (now() at time zone 'utc') - interval '30 days'
       group by 1
@@ -56,6 +56,7 @@ export default async function handler(req, res) {
         downvotes: down,
         score: up - down,
         created_at: c.created_at,
+        // keep your private image system:
         imageUrl: `/api/image?id=${encodeURIComponent(c.id)}`
       },
       lastVotes: (votes || []).map(v => ({

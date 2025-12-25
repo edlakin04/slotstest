@@ -284,31 +284,6 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* NEW: accept different backend keys safely */
-function pickFirstArray(obj, keys) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (Array.isArray(v)) return v;
-  }
-  return [];
-}
-
-/* NEW: normalize series items into { cum:number } */
-function normalizeNetSeries(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((p, i) => {
-    if (p && typeof p === "object") {
-      if (p.cum != null) return { cum: Number(p.cum) || 0 };
-      if (p.net != null) return { cum: Number(p.net) || 0 };
-      if (p.value != null) return { cum: Number(p.value) || 0 };
-      if (p.y != null) return { cum: Number(p.y) || 0 };
-      if (p.score != null) return { cum: Number(p.score) || 0 };
-    }
-    // number or unknown
-    return { cum: Number(p) || 0 };
-  });
-}
-
 /* ---------- tabs ---------- */
 tabGen && (tabGen.onclick = () => showView("gen"));
 tabRank && (tabRank.onclick = () => showView("rank"));
@@ -766,7 +741,6 @@ async function voteCard(cardId, vote, pillEl) {
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
-
     const message = `COM COIN vote | ${cardId} | ${vote} | ${today}`;
 
     const encoded = new TextEncoder().encode(message);
@@ -794,10 +768,9 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
-      setCardMsg("VOTE LOCKED FOR TODAY.", "ok");
-
+      setCardMsg("VOTED.", "ok");
       if (currentCardId && currentCardId === cardId) {
-        setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 450);
+        setTimeout(() => loadCardDetails(cardId, { silent: true, token: cardDetailsReqToken, forceImage: false }), 400);
       }
     } else {
       setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
@@ -805,9 +778,6 @@ async function voteCard(cardId, vote, pillEl) {
   } catch (e) {
     const raw = String(e.message || e);
     const nicer =
-      raw.toLowerCase().includes("already voted") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
-      raw.toLowerCase().includes("duplicate") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
-      raw.toLowerCase().includes("replay") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw.toLowerCase().includes("limit") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw;
 
@@ -964,7 +934,7 @@ btnCardBack && (btnCardBack.onclick = async () => {
 
 btnCardRefresh && (btnCardRefresh.onclick = async () => {
   if (!currentCardId) return;
-  await loadCardDetails(currentCardId, { silent: false, forceImage: false });
+  await loadCardDetails(currentCardId, { silent: false, token: cardDetailsReqToken, forceImage: false });
 });
 
 function stopCardPolling() {
@@ -976,7 +946,7 @@ function startCardPolling(cardId) {
   stopCardPolling();
   cardPollTimer = setInterval(() => {
     if (!currentCardId) return;
-    loadCardDetails(currentCardId, { silent: true, forceImage: false });
+    loadCardDetails(currentCardId, { silent: true, token: cardDetailsReqToken, forceImage: false });
   }, 10_000);
 }
 
@@ -987,7 +957,6 @@ async function openCardDetails(cardId) {
   currentCardImageBase = null;
 
   showView("card");
-
   if (cardTitle) cardTitle.textContent = "LOADING…";
   if (cardMeta) cardMeta.innerHTML = "—";
   if (cardScorePill) cardScorePill.textContent = "SCORE: —";
@@ -997,12 +966,8 @@ async function openCardDetails(cardId) {
     cardImg.removeAttribute("src");
     cardImg.style.visibility = "hidden";
   }
-
-  if (cardVoteStatusPill) {
-    cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-  }
-
-  setCardMsg("LOADING COM CARD…", "");
+  if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+  setCardMsg("", "");
 
   await loadCardDetails(cardId, { silent: true, token: myToken, forceImage: true });
   startCardPolling(cardId);
@@ -1018,24 +983,23 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* NEW: make canvas match CSS size so line spans properly */
-function ensureCanvasSize(canvas, desiredHeight = 140) {
+/* ✅ crisp canvas sizing */
+function resizeCanvasToDisplaySize(canvas) {
   if (!canvas) return;
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const cssW = Math.max(10, Math.floor(canvas.clientWidth || 640));
-  const cssH = Math.max(80, Math.floor(canvas.clientHeight || desiredHeight));
-  const w = Math.floor(cssW * dpr);
-  const h = Math.floor(cssH * dpr);
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width * dpr));
+  const h = Math.max(1, Math.floor(rect.height * dpr));
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
   }
 }
 
+/* ✅ Normal line chart left->right */
 function drawNetChart(canvas, series) {
   if (!canvas) return;
-
-  ensureCanvasSize(canvas, 140);
+  resizeCanvasToDisplaySize(canvas);
 
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
@@ -1043,64 +1007,86 @@ function drawNetChart(canvas, series) {
 
   ctx.clearRect(0, 0, w, h);
 
-  const vals = (series || []).map(p => Number(p?.cum ?? 0));
-  if (!vals.length) {
+  const pad = 18;
+
+  if (!series || !series.length) {
     ctx.fillStyle = "rgba(233,255,241,.80)";
-    ctx.font = `${Math.max(10, Math.floor(h/10))}px 'Press Start 2P'`;
-    ctx.fillText("NO VOTES YET", Math.floor(w*0.08), Math.floor(h*0.55));
+    ctx.font = "12px 'Press Start 2P'";
+    ctx.fillText("NO VOTE DATA YET", pad, Math.floor(h/2));
     return;
   }
 
-  const minV = Math.min(...vals);
-  const maxV = Math.max(...vals);
+  const values = series.map(p => Number(p.cum || 0));
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
   const range = (maxV - minV) || 1;
 
-  const padX = Math.floor(w * 0.07);
-  const padY = Math.floor(h * 0.18);
-
-  // Midline (0) if it exists in range, else midline of chart
-  const zeroY = (minV <= 0 && maxV >= 0)
-    ? (h - padY) - ((0 - minV) / range) * (h - 2*padY)
-    : Math.floor(h / 2);
-
-  // subtle midline
+  // axes
   ctx.strokeStyle = "rgba(180,255,210,.18)";
-  ctx.lineWidth = Math.max(1, Math.floor(h * 0.01));
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(padX, zeroY);
-  ctx.lineTo(w - padX, zeroY);
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
   ctx.stroke();
+
+  // 0 midline if relevant
+  if (minV <= 0 && maxV >= 0) {
+    const y0 = (h - pad) - ((0 - minV) / range) * (h - 2*pad);
+    ctx.strokeStyle = "rgba(200,255,0,.20)";
+    ctx.beginPath();
+    ctx.moveTo(pad, y0);
+    ctx.lineTo(w - pad, y0);
+    ctx.stroke();
+  }
+
+  // x spacing
+  const n = series.length;
+  const denom = (n - 1) || 1;
+
+  const xy = (i) => {
+    const x = pad + (i / denom) * (w - 2*pad);
+    const y = (h - pad) - ((values[i] - minV) / range) * (h - 2*pad);
+    return { x, y };
+  };
+
+  // ✅ if only 1 point, draw a horizontal line across
+  if (n === 1) {
+    const { y } = xy(0);
+    ctx.strokeStyle = "rgba(200,255,0,.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(w - pad, y);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(46,229,157,.95)";
+    ctx.fillRect(w - pad - 4, y - 4, 8, 8);
+    return;
+  }
 
   // line
   ctx.strokeStyle = "rgba(200,255,0,.95)";
-  ctx.lineWidth = Math.max(2, Math.floor(h * 0.02));
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
+  ctx.lineWidth = 3;
   ctx.beginPath();
-
-  for (let i = 0; i < vals.length; i++) {
-    const t = (vals.length === 1) ? 1 : (i / (vals.length - 1));
-    const x = padX + t * (w - 2*padX);
-    const y = (h - padY) - ((vals[i] - minV) / range) * (h - 2*padY);
+  for (let i = 0; i < n; i++) {
+    const { x, y } = xy(i);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.stroke();
 
-  // last point dot
-  const lastT = 1;
-  const lx = padX + lastT * (w - 2*padX);
-  const ly = (h - padY) - ((vals[vals.length - 1] - minV) / range) * (h - 2*padY);
+  // last point marker
+  const last = xy(n - 1);
   ctx.fillStyle = "rgba(46,229,157,.95)";
-  const dot = Math.max(4, Math.floor(h * 0.03));
-  ctx.fillRect(lx - dot/2, ly - dot/2, dot, dot);
+  ctx.fillRect(last.x - 4, last.y - 4, 8, 8);
 }
 
 async function loadCardDetails(cardId, { silent = true, token = null, forceImage = false } = {}) {
   const myToken = token ?? cardDetailsReqToken;
 
   try {
-    if (!silent) setCardMsg("LOADING COM CARD…", "");
+    if (!silent) setCardMsg("LOADING CARD DETAILS…", "");
 
     const res = await fetch(`/api/card_details?id=${encodeURIComponent(cardId)}`);
     const text = await res.text();
@@ -1110,20 +1096,16 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     if (!res.ok) throw new Error(data?.error || text || "FAILED TO LOAD DETAILS");
     if (myToken !== cardDetailsReqToken || cardId !== currentCardId) return;
 
-    const c = data.card || data.item || data.comCard || data.com_card || null;
-
-    // votes + series: accept multiple backend key names
-    const votesRaw = pickFirstArray(data, ["lastVotes", "recentVotes", "votes", "items", "recent_votes"]);
-    const seriesRaw = pickFirstArray(data, ["netSeries", "series", "net", "net_series", "chart", "chartSeries", "points"]);
-    const votes = votesRaw || [];
-    const series = normalizeNetSeries(seriesRaw || []);
+    const c = data.card;
+    const votes = data.lastVotes || [];
+    const series = data.netSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
 
-    // do NOT refresh image on polling updates
-    if (cardImg && c?.imageUrl) {
+    if (cardImg) {
       const base = c.imageUrl;
       const shouldSet = forceImage || !currentCardImageBase || (currentCardImageBase !== base);
+
       if (shouldSet) {
         currentCardImageBase = base;
         cardImg.style.visibility = "hidden";
@@ -1134,50 +1116,38 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       }
     }
 
-    const up = Number(c?.upvotes ?? 0);
-    const down = Number(c?.downvotes ?? 0);
-    const score = Number(c?.score ?? (up - down));
+    if (cardScorePill) cardScorePill.textContent = `SCORE: ${c.score}  (▲${c.upvotes} ▼${c.downvotes})`;
+    if (cardCreatedPill) cardCreatedPill.textContent = `CREATED: ${fmtDate(c.created_at)}`;
 
-    if (cardScorePill) cardScorePill.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
-    if (cardCreatedPill) cardCreatedPill.textContent = `CREATED: ${fmtDate(c?.created_at || c?.createdAt)}`;
+    const ownerShort = shortWallet(c.owner_wallet);
+    const ownerFull = c.owner_wallet;
 
-    const ownerFull = c?.owner_wallet || c?.ownerWallet || "";
-    const ownerShort = shortWallet(ownerFull);
-    const cid = c?.id || c?.cardId || cardId;
-
-    // IMPORTANT TEXT CHANGES:
-    // - remove "VIEW: LAST 50..." line
-    // - no "LAST 50 VOTES" wording anywhere
     if (cardMeta) {
       cardMeta.innerHTML =
-        `ID: <span class="linkLike" id="cdId">${escapeHtml(cid)}</span><br/>` +
+        `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
-        `CREATED: ${escapeHtml(fmtTime(c?.created_at || c?.createdAt))}`;
+        `CREATED: ${escapeHtml(fmtTime(c.created_at))}`;
       cardMeta.querySelector("#cdOwner")?.addEventListener("click", async () => {
-        if (ownerFull) await openWalletPage(ownerFull);
+        await openWalletPage(ownerFull);
       });
       cardMeta.querySelector("#cdId")?.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(String(cid));
+        await navigator.clipboard.writeText(String(c.id));
         setCardMsg("CARD ID COPIED.", "ok");
       });
     }
 
-    // votes list: now says RECENT VOTES behavior, but no header text forced here
     if (cardVotesList) {
       if (!votes.length) {
         cardVotesList.innerHTML = `<div class="voteRowLine">NO VOTES YET</div>`;
       } else {
         cardVotesList.innerHTML = votes.map(v => {
-          const vv = Number(v.vote ?? v.direction ?? v.value ?? 0);
-          const dir = vv === 1 ? "UP" : "DOWN";
-          const cls = vv === 1 ? "voteDirUp" : "voteDirDown";
-          const wallet = v.voter_wallet || v.voterWallet || v.wallet || "";
-          const ts = v.created_at || v.createdAt || v.ts || v.time || null;
+          const dir = Number(v.vote) === 1 ? "UP" : "DOWN";
+          const cls = Number(v.vote) === 1 ? "voteDirUp" : "voteDirDown";
           return `
             <div class="voteRowLine">
               <span class="${cls}">${dir}</span>
-              <span class="linkLike" data-w="${escapeHtml(wallet)}">${escapeHtml(shortWallet(wallet))}</span>
-              <span>${escapeHtml(fmtTime(ts))}</span>
+              <span class="linkLike" data-w="${escapeHtml(v.voter_wallet)}">${escapeHtml(shortWallet(v.voter_wallet))}</span>
+              <span>${escapeHtml(fmtTime(v.created_at))}</span>
             </div>
           `;
         }).join("");
@@ -1191,13 +1161,10 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       }
     }
 
-    // graph updates live now (series key-flexible + canvas resize)
     drawNetChart(cardChart, series);
 
     if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-
-    // CHANGED: no "LAST 50 VOTES" wording
-    setCardMsg("RECENT VOTES • LIVE GRAPH", "ok");
+    if (!silent) setCardMsg("", "");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");
@@ -1215,16 +1182,16 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
   }
 })();
 
+window.addEventListener("resize", () => {
+  if (viewCard && !viewCard.classList.contains("hidden")) {
+    // redraw chart on resize if possible
+    // (loadCardDetails will redraw on next poll, but do it now for crispness)
+    if (cardChart) resizeCanvasToDisplaySize(cardChart);
+  }
+});
+
 setSort(currentSort);
 showView("gen");
 setCardsBigTitleText("COM CARDS");
 setCardsMsg(VOTE_RULE_TEXT, "");
 setMyCardsMsg("CONNECT WALLET TO SEE YOUR COM CARDS.", "");
-
-/* NEW: keep details chart width correct if user resizes */
-window.addEventListener("resize", () => {
-  if (viewCard && !viewCard.classList.contains("hidden") && currentCardId) {
-    // redraw without reloading
-    try { ensureCanvasSize(cardChart, 140); } catch {}
-  }
-}, { passive: true });

@@ -19,35 +19,36 @@ export default async function handler(req, res) {
     const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
-    // Enforce: 1 vote per day per wallet per card (UTC day)
-    // If they've already voted today, block.
-    const already = await sql`
-      select 1
-      from votes
-      where card_id = ${cardId}
-        and voter_wallet = ${pubkey}
-        and vote_day = ((now() at time zone 'utc')::date)
-      limit 1
-    `;
-    if (already?.length) {
-      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-    }
+    // ✅ TEMP TESTING SWITCH:
+    // Set env TEST_UNLIMITED_VOTES=true to disable the daily limit (recommended only in Preview/Dev).
+    // Remove it or set false to restore normal behavior.
+    const TEST_UNLIMITED_VOTES =
+      process.env.NODE_ENV !== "production" &&
+      String(process.env.TEST_UNLIMITED_VOTES || "").toLowerCase() === "true";
 
-    // Insert vote event
-    // IMPORTANT: if you have a UNIQUE/PK constraint that can still fire, catch 23505 and return clean 429.
-    try {
-      await sql`
-        insert into votes (card_id, voter_wallet, vote)
-        values (${cardId}, ${pubkey}, ${v})
+    // Enforce: 1 vote per day per wallet per card (UTC day)
+    // If they've already voted today, block. (disabled when TEST_UNLIMITED_VOTES=true)
+    if (!TEST_UNLIMITED_VOTES) {
+      const already = await sql`
+        select 1
+        from votes
+        where card_id = ${cardId}
+          and voter_wallet = ${pubkey}
+          and vote_day = ((now() at time zone 'utc')::date)
+        limit 1
       `;
-    } catch (err) {
-      const code = err?.code || err?.cause?.code;
-      // 23505 = unique_violation
-      if (code === "23505") {
+      if (already?.length) {
         return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
       }
-      throw err;
     }
+
+    // Insert a NEW vote event (history table style)
+    // If your table currently has a UNIQUE/PK that blocks repeats, you may need to remove that constraint
+    // (or create a separate vote_events table). With TEST_UNLIMITED_VOTES on, this will insert many rows.
+    await sql`
+      insert into votes (card_id, voter_wallet, vote)
+      values (${cardId}, ${pubkey}, ${v})
+    `;
 
     // Update card totals
     const upDelta = v === 1 ? 1 : 0;
@@ -64,11 +65,6 @@ export default async function handler(req, res) {
     const { upvotes, downvotes } = updated[0];
     return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
   } catch (e) {
-    // Also hide unique-violation if it bubbles here for any reason
-    const code = e?.code || e?.cause?.code;
-    if (code === "23505") {
-      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-    }
     return j(res, 500, { error: String(e?.message || e) });
   }
 }

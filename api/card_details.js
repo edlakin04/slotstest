@@ -18,8 +18,9 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // ✅ last 50 votes for the "Recent votes" list
-    const votes = await sql`
+    // ✅ Pull last 50 votes from the REAL table: votes
+    // We order DESC for the "recent votes" list, but we also build a chart series ASC.
+    const votesDesc = await sql`
       select voter_wallet, vote, created_at
       from votes
       where card_id = ${id}
@@ -27,24 +28,19 @@ export default async function handler(req, res) {
       limit 50
     `;
 
-    // ✅ graph series = sliding window of LAST 50 votes
-    // we build a cumulative line from oldest->newest within that window
-    const windowAsc = (votes || []).slice().reverse();
+    // Same votes but ASC for chart building (oldest → newest)
+    const votesAsc = [...(votesDesc || [])].reverse();
 
+    // Build a time-based step series:
+    // points: [{ t: <ms>, cum: <net cumulative> }]
     let cum = 0;
-
-    // baseline point so the line starts at 0 on the left
-    let series = [{ t: (windowAsc[0]?.created_at || c.created_at), cum: 0 }];
-
-    for (const r of windowAsc) {
-      cum += Number(r.vote || 0); // +1 or -1
-      series.push({ t: r.created_at, cum });
-    }
-
-    // if no votes at all, keep a single baseline
-    if (!windowAsc.length) {
-      series = [{ t: c.created_at, cum: 0 }];
-    }
+    const voteSeries = (votesAsc || []).map((v) => {
+      cum += Number(v.vote || 0);
+      return {
+        t: new Date(v.created_at).getTime(),
+        cum
+      };
+    });
 
     const up = Number(c.upvotes || 0);
     const down = Number(c.downvotes || 0);
@@ -61,12 +57,13 @@ export default async function handler(req, res) {
         created_at: c.created_at,
         imageUrl: `/api/image?id=${encodeURIComponent(c.id)}`
       },
-      lastVotes: (votes || []).map(v => ({
+      lastVotes: (votesDesc || []).map(v => ({
         voter_wallet: v.voter_wallet,
         vote: Number(v.vote || 0),
         created_at: v.created_at
       })),
-      netSeries: series
+      // ✅ chart series (last 50 votes, time spaced)
+      voteSeries
     });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });

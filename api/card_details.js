@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Recent votes (last 50) FROM votes (not vote_events)
+    // ✅ last 50 votes for the "Recent votes" list
     const votes = await sql`
       select voter_wallet, vote, created_at
       from votes
@@ -27,24 +27,24 @@ export default async function handler(req, res) {
       limit 50
     `;
 
-    // ✅ Net series as a NORMAL line:
-    // take last 200 votes oldest->newest, cumulative sum
-    const seriesRows = await sql`
-      select vote, created_at
-      from votes
-      where card_id = ${id}
-      order by created_at asc
-      limit 200
-    `;
+    // ✅ graph series = sliding window of LAST 50 votes
+    // we build a cumulative line from oldest->newest within that window
+    const windowAsc = (votes || []).slice().reverse();
 
     let cum = 0;
-    const series = (seriesRows || []).map((r) => {
-      cum += Number(r.vote || 0);
-      return {
-        t: r.created_at,
-        cum
-      };
-    });
+
+    // baseline point so the line starts at 0 on the left
+    let series = [{ t: (windowAsc[0]?.created_at || c.created_at), cum: 0 }];
+
+    for (const r of windowAsc) {
+      cum += Number(r.vote || 0); // +1 or -1
+      series.push({ t: r.created_at, cum });
+    }
+
+    // if no votes at all, keep a single baseline
+    if (!windowAsc.length) {
+      series = [{ t: c.created_at, cum: 0 }];
+    }
 
     const up = Number(c.upvotes || 0);
     const down = Number(c.downvotes || 0);
@@ -66,7 +66,6 @@ export default async function handler(req, res) {
         vote: Number(v.vote || 0),
         created_at: v.created_at
       })),
-      // ✅ now series is per-vote movement, not per-day
       netSeries: series
     });
   } catch (e) {

@@ -4,53 +4,58 @@ export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
 
-    if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
+    if (req.method !== "POST") {
+      return j(res, 405, { error: "Method not allowed" });
+    }
 
     const body = await readJson(req);
     const { cardId, vote, pubkey, message, signature } = body || {};
-    if (!cardId || !pubkey || !message || !signature) return j(res, 400, { error: "Missing fields" });
+
+    if (!cardId || !pubkey || !message || !signature) {
+      return j(res, 400, { error: "Missing fields" });
+    }
 
     const v = Number(vote);
-    if (v !== 1 && v !== -1) return j(res, 400, { error: "vote must be 1 or -1" });
+    if (v !== 1 && v !== -1) {
+      return j(res, 400, { error: "vote must be 1 or -1" });
+    }
 
+    // 🔐 Verify Phantom signature
     verifyPhantomSign({ pubkey, message, signature });
 
     // Ensure card exists
-    const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
-    if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
-
-    // ✅ TEMP TESTING SWITCH:
-    // Set env TEST_UNLIMITED_VOTES=true to disable the daily limit (recommended only in Preview/Dev).
-    // Remove it or set false to restore normal behavior.
-    const TEST_UNLIMITED_VOTES =
-      process.env.NODE_ENV !== "production" &&
-      String(process.env.TEST_UNLIMITED_VOTES || "").toLowerCase() === "true";
-
-    // Enforce: 1 vote per day per wallet per card (UTC day)
-    // If they've already voted today, block. (disabled when TEST_UNLIMITED_VOTES=true)
-    if (!TEST_UNLIMITED_VOTES) {
-      const already = await sql`
-        select 1
-        from votes
-        where card_id = ${cardId}
-          and voter_wallet = ${pubkey}
-          and vote_day = ((now() at time zone 'utc')::date)
-        limit 1
-      `;
-      if (already?.length) {
-        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-      }
+    const cardRows = await sql`
+      select id
+      from com_cards
+      where id = ${cardId}
+      limit 1
+    `;
+    if (!cardRows?.length) {
+      return j(res, 404, { error: "Card not found" });
     }
 
-    // Insert a NEW vote event (history table style)
-    // If your table currently has a UNIQUE/PK that blocks repeats, you may need to remove that constraint
-    // (or create a separate vote_events table). With TEST_UNLIMITED_VOTES on, this will insert many rows.
+    // 🚫 Enforce: 1 vote per day per wallet per card (UTC day)
+    const already = await sql`
+      select 1
+      from votes
+      where card_id = ${cardId}
+        and voter_wallet = ${pubkey}
+        and vote_day = ((now() at time zone 'utc')::date)
+      limit 1
+    `;
+    if (already?.length) {
+      return j(res, 429, {
+        error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)."
+      });
+    }
+
+    // 🗳️ Insert vote event (append-only)
     await sql`
       insert into votes (card_id, voter_wallet, vote)
       values (${cardId}, ${pubkey}, ${v})
     `;
 
-    // Update card totals
+    // 📊 Update card totals
     const upDelta = v === 1 ? 1 : 0;
     const downDelta = v === -1 ? 1 : 0;
 
@@ -63,8 +68,16 @@ export default async function handler(req, res) {
     `;
 
     const { upvotes, downvotes } = updated[0];
-    return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
+
+    return j(res, 200, {
+      ok: true,
+      upvotes,
+      downvotes,
+      score: upvotes - downvotes
+    });
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    return j(res, 500, {
+      error: String(e?.message || e)
+    });
   }
 }

@@ -20,6 +20,7 @@ export default async function handler(req, res) {
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
     // Enforce: 1 vote per day per wallet per card (UTC day)
+    // If they've already voted today, block.
     const already = await sql`
       select 1
       from votes
@@ -32,12 +33,21 @@ export default async function handler(req, res) {
       return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
 
-    // ✅ Insert NEW vote event (history)
-    // ✅ Force vote_day so the rule always works even if DB defaults are missing.
-    await sql`
-      insert into votes (card_id, voter_wallet, vote, vote_day)
-      values (${cardId}, ${pubkey}, ${v}, ((now() at time zone 'utc')::date))
-    `;
+    // Insert vote event
+    // IMPORTANT: if you have a UNIQUE/PK constraint that can still fire, catch 23505 and return clean 429.
+    try {
+      await sql`
+        insert into votes (card_id, voter_wallet, vote)
+        values (${cardId}, ${pubkey}, ${v})
+      `;
+    } catch (err) {
+      const code = err?.code || err?.cause?.code;
+      // 23505 = unique_violation
+      if (code === "23505") {
+        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
+      }
+      throw err;
+    }
 
     // Update card totals
     const upDelta = v === 1 ? 1 : 0;
@@ -54,6 +64,11 @@ export default async function handler(req, res) {
     const { upvotes, downvotes } = updated[0];
     return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
   } catch (e) {
+    // Also hide unique-violation if it bubbles here for any reason
+    const code = e?.code || e?.cause?.code;
+    if (code === "23505") {
+      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
+    }
     return j(res, 500, { error: String(e?.message || e) });
   }
 }

@@ -18,8 +18,7 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Pull last 50 votes from the REAL table: votes
-    // We order DESC for the "recent votes" list, but we also build a chart series ASC.
+    // ✅ Recent votes from the real table: votes
     const votesDesc = await sql`
       select voter_wallet, vote, created_at
       from votes
@@ -28,11 +27,10 @@ export default async function handler(req, res) {
       limit 50
     `;
 
-    // Same votes but ASC for chart building (oldest → newest)
+    // For chart (oldest → newest)
     const votesAsc = [...(votesDesc || [])].reverse();
 
-    // Build a time-based step series:
-    // points: [{ t: <ms>, cum: <net cumulative> }]
+    // cumulative series for last 50 votes
     let cum = 0;
     const voteSeries = (votesAsc || []).map((v) => {
       cum += Number(v.vote || 0);
@@ -62,7 +60,6 @@ export default async function handler(req, res) {
         vote: Number(v.vote || 0),
         created_at: v.created_at
       })),
-      // ✅ chart series (last 50 votes, time spaced)
       voteSeries
     });
   } catch (e) {

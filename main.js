@@ -768,7 +768,6 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
-
       if (currentCardId && currentCardId === cardId) {
         setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 400);
       }
@@ -984,8 +983,13 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* ✅ NEW: proper trading-style step line chart (time-spaced X, last 50 votes) */
-function drawVoteChart(canvas, series) {
+/* ✅ FIXED: NORMAL LINE CHART
+   - Starts at bottom-left at value 0
+   - Smooth polyline (no right angles)
+   - Never goes above 3/4 height (topLimit)
+   - Uses last 50 points, evenly spaced
+*/
+function drawVoteChart(canvas, voteSeries) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
@@ -993,76 +997,82 @@ function drawVoteChart(canvas, series) {
 
   ctx.clearRect(0, 0, w, h);
 
-  // grid / axes
   const pad = 14;
+  const bottom = h - pad;
+
+  // line should never go above 3/4 height:
+  // meaning topLimit is 25% down from the top drawable area
+  const drawableH = (h - 2 * pad);
+  const topLimit = pad + drawableH * 0.25;
+
+  // axes
   ctx.strokeStyle = "rgba(180,255,210,.18)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(pad, pad);
-  ctx.lineTo(pad, h - pad);
-  ctx.lineTo(w - pad, h - pad);
+  ctx.lineTo(pad, bottom);
+  ctx.lineTo(w - pad, bottom);
   ctx.stroke();
 
-  if (!series || !series.length) {
+  if (!voteSeries || !voteSeries.length) {
     ctx.fillStyle = "rgba(233,255,241,.80)";
     ctx.font = "12px 'Press Start 2P'";
-    ctx.fillText("NO VOTES YET", 18, Math.floor(h/2));
+    ctx.fillText("NO VOTES YET", 18, Math.floor(h / 2));
     return;
   }
 
-  // Normalize X by time (not shown, but used for spacing)
-  const times = series.map(p => Number(p.t || 0)).filter(Boolean);
-  const values = series.map(p => Number(p.cum || 0));
+  // Build values: baseline 0 first, then each cumulative point
+  const vals = [0, ...voteSeries.map(p => Number(p.cum || 0))];
 
-  const minT = Math.min(...times);
-  const maxT = Math.max(...times);
-  const tRange = (maxT - minT) || 1;
+  // Ensure 0 is always included in scaling
+  let minV = Math.min(...vals);
+  let maxV = Math.max(...vals);
 
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const vRange = (maxV - minV) || 1;
-
-  const xOf = (t) => pad + ((t - minT) / tRange) * (w - 2*pad);
-  const yOf = (v) => (h - pad) - ((v - minV) / vRange) * (h - 2*pad);
-
-  // optional 0 midline
-  if (minV <= 0 && maxV >= 0) {
-    const y0 = yOf(0);
-    ctx.strokeStyle = "rgba(200,255,0,.20)";
-    ctx.beginPath();
-    ctx.moveTo(pad, y0);
-    ctx.lineTo(w - pad, y0);
-    ctx.stroke();
+  // Add small padding so it doesn't smash top/bottom
+  if (minV === maxV) {
+    minV -= 1;
+    maxV += 1;
+  } else {
+    const padV = (maxV - minV) * 0.12;
+    minV -= padV;
+    maxV += padV;
   }
 
-  // Step line: horizontal hold, then vertical move at vote time
+  const range = (maxV - minV) || 1;
+
+  // Map value to Y where:
+  // maxV -> topLimit (never above)
+  // minV -> bottom
+  const yOf = (v) => {
+    const t = (v - minV) / range; // 0..1
+    return bottom - t * (bottom - topLimit);
+  };
+
+  // X evenly spaced by index so it looks like a normal chart
+  const n = vals.length;
+  const xOfIndex = (i) => {
+    if (n <= 1) return pad;
+    return pad + (i / (n - 1)) * (w - 2 * pad);
+  };
+
+  // Draw the polyline (smooth-ish join)
   ctx.strokeStyle = "rgba(200,255,0,.95)";
   ctx.lineWidth = 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
   ctx.beginPath();
-
-  // Start at first point
-  let x0 = xOf(series[0].t);
-  let y0 = yOf(series[0].cum);
-  ctx.moveTo(x0, y0);
-
-  for (let i = 1; i < series.length; i++) {
-    const x1 = xOf(series[i].t);
-    const y1 = yOf(series[i].cum);
-
-    // horizontal hold to next time
-    ctx.lineTo(x1, y0);
-    // vertical change at that time
-    ctx.lineTo(x1, y1);
-
-    x0 = x1;
-    y0 = y1;
+  ctx.moveTo(xOfIndex(0), yOf(vals[0]));
+  for (let i = 1; i < n; i++) {
+    ctx.lineTo(xOfIndex(i), yOf(vals[i]));
   }
-
   ctx.stroke();
 
   // last point marker
+  const lx = xOfIndex(n - 1);
+  const ly = yOf(vals[n - 1]);
   ctx.fillStyle = "rgba(46,229,157,.95)";
-  ctx.fillRect(x0 - 4, y0 - 4, 8, 8);
+  ctx.fillRect(lx - 4, ly - 4, 8, 8);
 }
 
 async function loadCardDetails(cardId, { silent = true, token = null, forceImage = false } = {}) {
@@ -1106,7 +1116,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     const ownerFull = c.owner_wallet;
 
     if (cardMeta) {
-      // ✅ removed the "VIEW: LAST 50..." line completely
       cardMeta.innerHTML =
         `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
@@ -1120,7 +1129,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       });
     }
 
-    // recent votes list
     if (cardVotesList) {
       if (!votes.length) {
         cardVotesList.innerHTML = `<div class="voteRowLine">NO VOTES YET</div>`;
@@ -1146,11 +1154,10 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       }
     }
 
-    // ✅ draw trading-style vote line
+    // ✅ normal line chart
     drawVoteChart(cardChart, series);
 
     if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
-    if (!silent) setCardMsg("", "");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");

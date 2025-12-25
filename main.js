@@ -768,9 +768,9 @@ async function voteCard(cardId, vote, pillEl) {
 
     if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
-      setCardMsg("VOTED.", "ok");
+
       if (currentCardId && currentCardId === cardId) {
-        setTimeout(() => loadCardDetails(cardId, { silent: true, token: cardDetailsReqToken, forceImage: false }), 400);
+        setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 400);
       }
     } else {
       setActiveCardsMessage(VOTE_RULE_TEXT, "ok");
@@ -778,6 +778,7 @@ async function voteCard(cardId, vote, pillEl) {
   } catch (e) {
     const raw = String(e.message || e);
     const nicer =
+      raw.toLowerCase().includes("duplicate key") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw.toLowerCase().includes("limit") ? "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." :
       raw;
 
@@ -934,7 +935,7 @@ btnCardBack && (btnCardBack.onclick = async () => {
 
 btnCardRefresh && (btnCardRefresh.onclick = async () => {
   if (!currentCardId) return;
-  await loadCardDetails(currentCardId, { silent: false, token: cardDetailsReqToken, forceImage: false });
+  await loadCardDetails(currentCardId, { silent: false, forceImage: false });
 });
 
 function stopCardPolling() {
@@ -946,7 +947,7 @@ function startCardPolling(cardId) {
   stopCardPolling();
   cardPollTimer = setInterval(() => {
     if (!currentCardId) return;
-    loadCardDetails(currentCardId, { silent: true, token: cardDetailsReqToken, forceImage: false });
+    loadCardDetails(currentCardId, { silent: true, forceImage: false });
   }, 10_000);
 }
 
@@ -983,45 +984,17 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* crisp canvas sizing */
-function resizeCanvasToDisplaySize(canvas) {
+/* ✅ NEW: proper trading-style step line chart (time-spaced X, last 50 votes) */
+function drawVoteChart(canvas, series) {
   if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width * dpr));
-  const h = Math.max(1, Math.floor(rect.height * dpr));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-}
-
-/* ✅ cumulative line chart */
-function drawNetChart(canvas, series) {
-  if (!canvas) return;
-  resizeCanvasToDisplaySize(canvas);
-
   const ctx = canvas.getContext("2d");
   const w = canvas.width;
   const h = canvas.height;
 
   ctx.clearRect(0, 0, w, h);
 
-  const pad = 18;
-
-  if (!series || !series.length) {
-    ctx.fillStyle = "rgba(233,255,241,.80)";
-    ctx.font = "12px 'Press Start 2P'";
-    ctx.fillText("NO VOTE DATA YET", pad, Math.floor(h/2));
-    return;
-  }
-
-  const values = series.map(p => Number(p.cum ?? 0));
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const range = (maxV - minV) || 1;
-
-  // axes
+  // grid / axes
+  const pad = 14;
   ctx.strokeStyle = "rgba(180,255,210,.18)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1030,9 +1003,31 @@ function drawNetChart(canvas, series) {
   ctx.lineTo(w - pad, h - pad);
   ctx.stroke();
 
-  // 0 midline if relevant
+  if (!series || !series.length) {
+    ctx.fillStyle = "rgba(233,255,241,.80)";
+    ctx.font = "12px 'Press Start 2P'";
+    ctx.fillText("NO VOTES YET", 18, Math.floor(h/2));
+    return;
+  }
+
+  // Normalize X by time (not shown, but used for spacing)
+  const times = series.map(p => Number(p.t || 0)).filter(Boolean);
+  const values = series.map(p => Number(p.cum || 0));
+
+  const minT = Math.min(...times);
+  const maxT = Math.max(...times);
+  const tRange = (maxT - minT) || 1;
+
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const vRange = (maxV - minV) || 1;
+
+  const xOf = (t) => pad + ((t - minT) / tRange) * (w - 2*pad);
+  const yOf = (v) => (h - pad) - ((v - minV) / vRange) * (h - 2*pad);
+
+  // optional 0 midline
   if (minV <= 0 && maxV >= 0) {
-    const y0 = (h - pad) - ((0 - minV) / range) * (h - 2*pad);
+    const y0 = yOf(0);
     ctx.strokeStyle = "rgba(200,255,0,.20)";
     ctx.beginPath();
     ctx.moveTo(pad, y0);
@@ -1040,30 +1035,34 @@ function drawNetChart(canvas, series) {
     ctx.stroke();
   }
 
-  const n = series.length;
-  const denom = (n - 1) || 1;
-
-  const xy = (i) => {
-    const x = pad + (i / denom) * (w - 2*pad);
-    const y = (h - pad) - ((values[i] - minV) / range) * (h - 2*pad);
-    return { x, y };
-  };
-
-  // line
+  // Step line: horizontal hold, then vertical move at vote time
   ctx.strokeStyle = "rgba(200,255,0,.95)";
   ctx.lineWidth = 3;
   ctx.beginPath();
-  for (let i = 0; i < n; i++) {
-    const { x, y } = xy(i);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+
+  // Start at first point
+  let x0 = xOf(series[0].t);
+  let y0 = yOf(series[0].cum);
+  ctx.moveTo(x0, y0);
+
+  for (let i = 1; i < series.length; i++) {
+    const x1 = xOf(series[i].t);
+    const y1 = yOf(series[i].cum);
+
+    // horizontal hold to next time
+    ctx.lineTo(x1, y0);
+    // vertical change at that time
+    ctx.lineTo(x1, y1);
+
+    x0 = x1;
+    y0 = y1;
   }
+
   ctx.stroke();
 
   // last point marker
-  const last = xy(n - 1);
   ctx.fillStyle = "rgba(46,229,157,.95)";
-  ctx.fillRect(last.x - 4, last.y - 4, 8, 8);
+  ctx.fillRect(x0 - 4, y0 - 4, 8, 8);
 }
 
 async function loadCardDetails(cardId, { silent = true, token = null, forceImage = false } = {}) {
@@ -1082,7 +1081,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     const c = data.card;
     const votes = data.lastVotes || [];
-    const series = data.netSeries || [];
+    const series = data.voteSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
 
@@ -1107,6 +1106,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     const ownerFull = c.owner_wallet;
 
     if (cardMeta) {
+      // ✅ removed the "VIEW: LAST 50..." line completely
       cardMeta.innerHTML =
         `ID: <span class="linkLike" id="cdId">${escapeHtml(c.id)}</span><br/>` +
         `OWNER: <span class="linkLike" id="cdOwner">${escapeHtml(ownerShort)}</span><br/>` +
@@ -1120,6 +1120,7 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       });
     }
 
+    // recent votes list
     if (cardVotesList) {
       if (!votes.length) {
         cardVotesList.innerHTML = `<div class="voteRowLine">NO VOTES YET</div>`;
@@ -1145,9 +1146,11 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       }
     }
 
-    drawNetChart(cardChart, series);
+    // ✅ draw trading-style vote line
+    drawVoteChart(cardChart, series);
 
     if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+    if (!silent) setCardMsg("", "");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");
@@ -1164,12 +1167,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     setConnectedUI(false);
   }
 })();
-
-window.addEventListener("resize", () => {
-  if (viewCard && !viewCard.classList.contains("hidden")) {
-    if (cardChart) resizeCanvasToDisplaySize(cardChart);
-  }
-});
 
 setSort(currentSort);
 showView("gen");

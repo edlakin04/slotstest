@@ -20,7 +20,6 @@ export default async function handler(req, res) {
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
     // Enforce: 1 vote per day per wallet per card (UTC day)
-    // If they've already voted today, block.
     const already = await sql`
       select 1
       from votes
@@ -33,10 +32,11 @@ export default async function handler(req, res) {
       return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
 
-    // Insert a NEW vote event (history table style)
+    // ✅ Insert NEW vote event (history)
+    // ✅ Force vote_day so the rule always works even if DB defaults are missing.
     await sql`
-      insert into votes (card_id, voter_wallet, vote)
-      values (${cardId}, ${pubkey}, ${v})
+      insert into votes (card_id, voter_wallet, vote, vote_day)
+      values (${cardId}, ${pubkey}, ${v}, ((now() at time zone 'utc')::date))
     `;
 
     // Update card totals

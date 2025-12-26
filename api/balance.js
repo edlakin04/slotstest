@@ -1,14 +1,18 @@
+import { isBase58Pubkey } from "./_lib.js";
+
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const pubkey = url.searchParams.get("pubkey");
+
     if (!pubkey) return json(res, 400, { error: "Missing pubkey" });
+    if (!isBase58Pubkey(pubkey)) return json(res, 400, { error: "Invalid pubkey" });
 
     const RPC = process.env.HELIUS_RPC_URL;
     const MINT = process.env.COMCOIN_MINT;
 
-    if (!RPC) return json(res, 500, { error: "Missing env var: HELIUS_RPC_URL" });
-    if (!MINT) return json(res, 500, { error: "Missing env var: COMCOIN_MINT" });
+    if (!RPC) return json(res, 500, { error: "Server error" });
+    if (!MINT) return json(res, 500, { error: "Server error" });
 
     const r = await fetch(RPC, {
       method: "POST",
@@ -25,9 +29,9 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await r.json();
-    if (!r.ok) return json(res, 500, { error: `RPC HTTP ${r.status}` });
-    if (data?.error) return json(res, 500, { error: data.error.message || "RPC error" });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) return json(res, 502, { error: "RPC error" });
+    if (data?.error) return json(res, 502, { error: "RPC error" });
 
     const accounts = data?.result?.value || [];
     let uiAmount = 0;
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
 
     return json(res, 200, { ok: true, uiAmount });
   } catch (e) {
-    return json(res, 500, { error: String(e?.message || e) });
+    return json(res, 500, { error: "Server error" });
   }
 }
 

@@ -1,7 +1,5 @@
 import { j, readJson, verifyPhantomSign, sql, requireEnv } from "./_lib.js";
 
-const LIMIT_MSG = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
-
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
@@ -21,21 +19,21 @@ export default async function handler(req, res) {
     const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Enforce 1 vote per UTC day using created_at (no vote_day dependency)
+    // Enforce: 1 vote per UTC day per wallet per card
+    // (vote_day_utc is generated from created_at, so compare against UTC today)
     const already = await sql`
       select 1
       from votes
       where card_id = ${cardId}
         and voter_wallet = ${pubkey}
-        and (created_at at time zone 'utc')::date = ((now() at time zone 'utc')::date)
+        and vote_day_utc = ((now() at time zone 'utc')::date)
       limit 1
     `;
     if (already?.length) {
-      return j(res, 429, { error: LIMIT_MSG });
+      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
 
     // Insert vote event
-    // (If you also have a unique constraint somewhere, we catch it below)
     await sql`
       insert into votes (card_id, voter_wallet, vote)
       values (${cardId}, ${pubkey}, ${v})
@@ -56,13 +54,11 @@ export default async function handler(req, res) {
     const { upvotes, downvotes } = updated[0];
     return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
   } catch (e) {
+    // If somehow unique index trips, show the nice message
     const msg = String(e?.message || e);
-
-    // ✅ Convert DB duplicate errors into the same nice limit message
-    if (msg.toLowerCase().includes("duplicate key")) {
-      return j(res, 429, { error: LIMIT_MSG });
+    if (msg.toLowerCase().includes("uq_votes_card_wallet_day") || msg.toLowerCase().includes("duplicate")) {
+      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
-
     return j(res, 500, { error: msg });
   }
 }

@@ -1201,9 +1201,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     // ✅ don’t revert to “SIGN…” or generic text on refresh/poll
     setDetailsVotePill(cardId);
-
-    // ✅ FIX: if user hit Refresh (silent=false), clear the "LOADING CARD DETAILS..." message after success
-    if (!silent) setCardMsg("", "");
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");

@@ -1,3 +1,5 @@
+// api/generate.js
+
 import {
   j,
   readJson,
@@ -24,15 +26,58 @@ function getIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+// ✅ server-side token balance check (prevents bypassing the UI)
+async function getTokenBalanceUiAmount({ rpcUrl, ownerPubkey, mint }) {
+  const r = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "comcoin_balance_server",
+      method: "getTokenAccountsByOwner",
+      params: [
+        ownerPubkey,
+        { mint },
+        { encoding: "jsonParsed" }
+      ]
+    })
+  });
+
+  const data = await r.json().catch(() => null);
+  if (!r.ok || !data || data?.error) {
+    const err = new Error("RPC error");
+    err.statusCode = 502;
+    throw err;
+  }
+
+  const accounts = data?.result?.value || [];
+  let uiAmount = 0;
+
+  for (const acc of accounts) {
+    const amt = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+    uiAmount += Number(amt || 0);
+  }
+
+  return uiAmount;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
 
+    // Required envs
     requireEnv("OPENAI_API_KEY");
     requireEnv("NEON_DATABASE_URL");
     requireEnv("SUPABASE_URL");
     requireEnv("SUPABASE_SERVICE_ROLE_KEY");
     requireEnv("SUPABASE_BUCKET");
+
+    // ✅ Also required for server-side balance enforcement
+    const RPC = requireEnv("HELIUS_RPC_URL");
+    const MINT = requireEnv("COMCOIN_MINT");
+
+    // Optional: minimum required token amount (defaults to 1)
+    const MIN_BAL = Number(process.env.MIN_COMCOIN_BALANCE ?? 1);
 
     const body = await readJson(req, { maxBytes: 20_000 });
     const { pubkey, message, signature } = body || {};
@@ -64,15 +109,28 @@ export default async function handler(req, res) {
       return j(res, 429, { error: "Daily generate limit reached" });
     }
 
-    // ✅ best-effort IP throttling (helps vs botnets a bit)
-    // (Still stateless; you can remove if you dislike)
+    // ✅ best-effort IP sanity
     const ip = getIp(req);
     if (typeof ip === "string" && ip.length > 200) {
       return j(res, 400, { error: "Bad request" });
     }
 
+    // ✅ Verify Phantom signature (authenticates pubkey owns signature for message)
     verifyPhantomSign({ pubkey, message, signature });
 
+    // ✅ ENFORCE HOLDING $COMCOIN ON THE SERVER (prevents bypassing UI)
+    const uiAmount = await getTokenBalanceUiAmount({
+      rpcUrl: RPC,
+      ownerPubkey: pubkey,
+      mint: MINT
+    });
+
+    if (!(uiAmount >= MIN_BAL)) {
+      // 403: authenticated but not allowed
+      return j(res, 403, { error: "Hold $COMCOIN to generate" });
+    }
+
+    // ---- Only now do we spend OpenAI + mint a card ----
     const category = pick(["animal", "tech billionaire", "celebrity", "politician"]);
     const prompt = [
       "Create a pixel art meme image, 1:1 square, crisp pixelated style.",
@@ -117,8 +175,10 @@ export default async function handler(req, res) {
     const msg =
       status === 400 ? (e?.message || "Bad request") :
       status === 401 ? "Unauthorized" :
+      status === 403 ? (e?.message || "Forbidden") :
       status === 413 ? "Request too large" :
       status === 429 ? "Rate limited" :
+      status === 502 ? "RPC error" :
       "Server error";
 
     return j(res, status, { error: msg });

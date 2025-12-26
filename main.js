@@ -1,34 +1,5 @@
-/* ---------- Option B1: local base58 encode (no deps, launch-safe) ---------- */
-const __B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function base58Encode(bytes) {
-  if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
-  if (bytes.length === 0) return "";
-
-  // Count leading zeros.
-  let zeros = 0;
-  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
-
-  // Convert base256 -> base58
-  const digits = [0];
-  for (let i = zeros; i < bytes.length; i++) {
-    let carry = bytes[i];
-    for (let j = 0; j < digits.length; j++) {
-      const x = digits[j] * 256 + carry;
-      digits[j] = x % 58;
-      carry = (x / 58) | 0;
-    }
-    while (carry) {
-      digits.push(carry % 58);
-      carry = (carry / 58) | 0;
-    }
-  }
-
-  // Leading zeros become "1"
-  let out = "";
-  for (let i = 0; i < zeros; i++) out += "1";
-  for (let i = digits.length - 1; i >= 0; i--) out += __B58_ALPHABET[digits[i]];
-  return out;
-}
+/* ✅ Option B: bs58 is loaded via <script src="/vendor/bs58.min.js"></script> */
+const bs58 = window.bs58;
 
 /* ---------- existing elements ---------- */
 const tabGen = document.getElementById("tabGen");
@@ -494,6 +465,7 @@ async function refreshBalanceAndRank({ quiet = false } = {}) {
 btnGenerate && (btnGenerate.onclick = async () => {
   try {
     if (!publicKeyBase58) throw new Error("CONNECT WALLET FIRST");
+    if (!bs58?.encode) throw new Error("BS58 LIB NOT LOADED (CHECK /vendor/bs58.min.js)");
 
     btnGenerate.disabled = true;
     if (btnCopyTweet) btnCopyTweet.disabled = true;
@@ -507,7 +479,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
-    const signature = base58Encode(signed.signature);
+    const signature = bs58.encode(signed.signature);
 
     setMsg("GENERATING IMAGE…");
 
@@ -779,6 +751,8 @@ async function voteCard(cardId, vote, pillEl) {
       return;
     }
 
+    if (!bs58?.encode) throw new Error("BS58 LIB NOT LOADED (CHECK /vendor/bs58.min.js)");
+
     if (hasVotedToday(publicKeyBase58, cardId)) {
       const msg = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
       if (onDetails) {
@@ -803,7 +777,7 @@ async function voteCard(cardId, vote, pillEl) {
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
-    const signature = base58Encode(signed.signature);
+    const signature = bs58.encode(signed.signature);
 
     const res = await fetch("/api/vote", {
       method: "POST",
@@ -838,6 +812,7 @@ async function voteCard(cardId, vote, pillEl) {
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
     updateCachesAfterVote(cardId, up, down);
+
     markVotedToday(publicKeyBase58, cardId);
 
     if (onDetails) {
@@ -1051,6 +1026,7 @@ async function openCardDetails(cardId) {
   startCardPolling(cardId);
 }
 
+/* detail page vote buttons */
 btnCardVoteUp && (btnCardVoteUp.onclick = async () => {
   if (!currentCardId) return;
   await voteCard(currentCardId, +1, cardScorePill);
@@ -1060,7 +1036,7 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* ---------- chart ---------- */
+/* NORMAL LINE CHART */
 function drawVoteChart(canvas, voteSeries) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -1213,8 +1189,8 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     }
 
     drawVoteChart(cardChart, series);
-    setDetailsVotePill(cardId);
 
+    setDetailsVotePill(cardId);
     if (!silent) setCardMsg("", "");
 
   } catch (e) {

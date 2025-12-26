@@ -1,4 +1,7 @@
-import bs58 from "https://cdn.skypack.dev/bs58";
+/* global bs58 */
+/* ✅ Option B: load bs58 from /vendor/bs58.min.js (no CDN) */
+const bs58 = window.bs58;
+if (!bs58) throw new Error("bs58 not found. Make sure /vendor/bs58.min.js is loaded before main.js");
 
 /* ---------- existing elements ---------- */
 const tabGen = document.getElementById("tabGen");
@@ -1131,9 +1134,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     const c = data.card;
     const votes = data.lastVotes || [];
 
-    // ✅ accept either field name from backend
-    // - your earlier backend uses netSeries
-    // - some versions use voteSeries
     const series = data.voteSeries || data.netSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
@@ -1199,11 +1199,10 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     drawVoteChart(cardChart, series);
 
-// ✅ don’t revert to “SIGN…” or generic text on refresh/poll
-setDetailsVotePill(cardId);
+    setDetailsVotePill(cardId);
 
-// ✅ FIX: clear “LOADING CARD DETAILS…” after manual refresh succeeds
-if (!silent) setCardMsg("", "");
+    // ✅ clear LOADING after manual refresh succeeds
+    if (!silent) setCardMsg("", "");
 
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;

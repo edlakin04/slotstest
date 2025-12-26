@@ -1,10 +1,6 @@
 import { j, readJson, verifyPhantomSign, sql, requireEnv } from "./_lib.js";
 
-function isUniqueViolation(err) {
-  const msg = String(err?.message || err || "");
-  // Postgres common patterns
-  return msg.includes("duplicate key value") || msg.includes("unique constraint");
-}
+const LIMIT_MSG = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
 
 export default async function handler(req, res) {
   try {
@@ -19,39 +15,31 @@ export default async function handler(req, res) {
     const v = Number(vote);
     if (v !== 1 && v !== -1) return j(res, 400, { error: "vote must be 1 or -1" });
 
-    // Verify signature
     verifyPhantomSign({ pubkey, message, signature });
 
     // Ensure card exists
     const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Enforce 1 vote per UTC day using created_at (NO vote_day needed)
+    // ✅ Enforce 1 vote per UTC day using created_at (no vote_day dependency)
     const already = await sql`
       select 1
       from votes
       where card_id = ${cardId}
         and voter_wallet = ${pubkey}
-        and ((created_at at time zone 'utc')::date) = ((now() at time zone 'utc')::date)
+        and (created_at at time zone 'utc')::date = ((now() at time zone 'utc')::date)
       limit 1
     `;
     if (already?.length) {
-      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
+      return j(res, 429, { error: LIMIT_MSG });
     }
 
     // Insert vote event
-    try {
-      await sql`
-        insert into votes (card_id, voter_wallet, vote)
-        values (${cardId}, ${pubkey}, ${v})
-      `;
-    } catch (e) {
-      // If your DB still has some unique constraint left over, convert to nice message
-      if (isUniqueViolation(e)) {
-        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-      }
-      throw e;
-    }
+    // (If you also have a unique constraint somewhere, we catch it below)
+    await sql`
+      insert into votes (card_id, voter_wallet, vote)
+      values (${cardId}, ${pubkey}, ${v})
+    `;
 
     // Update card totals
     const upDelta = v === 1 ? 1 : 0;
@@ -66,15 +54,15 @@ export default async function handler(req, res) {
     `;
 
     const { upvotes, downvotes } = updated[0];
-
-    return j(res, 200, {
-      ok: true,
-      upvotes,
-      downvotes,
-      score: Number(upvotes) - Number(downvotes),
-      utcDay: new Date().toISOString().slice(0, 10)
-    });
+    return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    const msg = String(e?.message || e);
+
+    // ✅ Convert DB duplicate errors into the same nice limit message
+    if (msg.toLowerCase().includes("duplicate key")) {
+      return j(res, 429, { error: LIMIT_MSG });
+    }
+
+    return j(res, 500, { error: msg });
   }
 }

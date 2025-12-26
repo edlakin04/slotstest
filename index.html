@@ -863,14 +863,13 @@
           <div class="rankCallout" id="rankCallout">CONNECT TO SEE YOUR HOLDER LEVEL.</div>
         </div>
 
-        <!-- kept in DOM for compatibility (not used now) -->
         <div style="display:none;">
           <div class="msg" id="rankCardsMsg"></div>
           <div class="miniGrid" id="rankMiniGrid"></div>
         </div>
       </div>
 
-      <!-- COM CARDS (BOARD + MY COM CARDS) -->
+      <!-- COM CARDS -->
       <div class="stage px-border hidden" id="viewCards">
         <div class="boardBig" id="cardsBigTitle">COM CARDS</div>
 
@@ -879,7 +878,6 @@
           <button class="toggleBtn" id="btnCardsMine" type="button">MY COM CARDS</button>
         </div>
 
-        <!-- BOARD WRAP -->
         <div id="cardsBoardWrap">
           <div class="boardHeader">
             <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
@@ -909,7 +907,6 @@
           <div class="grid" id="cardsGrid"></div>
         </div>
 
-        <!-- MY CARDS WRAP -->
         <div id="cardsMineWrap" class="hidden">
           <div class="boardHeader" style="justify-content:flex-start;">
             <button class="btn" id="btnRefreshMine" type="button">Refresh</button>
@@ -938,7 +935,7 @@
         </div>
       </div>
 
-      <!-- ✅ DETAILS PAGE -->
+      <!-- DETAILS PAGE -->
       <div class="stage px-border hidden" id="viewCard">
         <div class="detailWrap px-border-soft">
           <div class="detailTop">
@@ -957,7 +954,6 @@
                 <div class="pill" id="cardCreatedPill">CREATED: —</div>
               </div>
 
-              <!-- ✅ ADDED: VOTE ON DETAIL PAGE -->
               <div class="voteRow" style="margin-top:12px;">
                 <div class="voteBtns">
                   <button class="btn" id="btnCardVoteUp" type="button">UPVOTE</button>
@@ -1061,8 +1057,7 @@
         </div>
       </div>
 
-      <!-- ✅ IMPORTANT: load local bs58 BEFORE main.js -->
-      <script src="/vendor/bs58.min.js"></script>
+      <!-- ✅ ONLY main.js (Option B1: no vendor, no CDN) -->
       <script type="module" src="/main.js"></script>
     </div>
   </div>

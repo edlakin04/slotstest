@@ -1199,8 +1199,12 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     drawVoteChart(cardChart, series);
 
-    // ✅ don’t revert to “SIGN…” or generic text on refresh/poll
-    setDetailsVotePill(cardId);
+// ✅ don’t revert to “SIGN…” or generic text on refresh/poll
+setDetailsVotePill(cardId);
+
+// ✅ FIX: clear “LOADING CARD DETAILS…” after manual refresh succeeds
+if (!silent) setCardMsg("", "");
+
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");

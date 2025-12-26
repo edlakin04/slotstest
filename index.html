@@ -869,7 +869,7 @@
         </div>
       </div>
 
-      <!-- COM CARDS -->
+      <!-- COM CARDS (BOARD + MY COM CARDS) -->
       <div class="stage px-border hidden" id="viewCards">
         <div class="boardBig" id="cardsBigTitle">COM CARDS</div>
 
@@ -986,15 +986,12 @@
       <!-- MARKET -->
       <div class="stage px-border hidden" id="viewMarket">
         <div class="bigTitle">COM CARDS MARKET</div>
-
         <p class="sub">
           NEW YEAR UPGRADE INCOMING. THIS PAGE IS THE BLUEPRINT. THE MARKET LAYER TURNS COM CARDS FROM “A DAILY MEME”
           INTO A FULL ECONOMY WHERE <b>$COMCOIN</b> IS THE ONLY FUEL.
         </p>
-
         <div class="marketWrap px-border-soft">
           <div class="marketTitle">What’s coming</div>
-
           <p class="marketP">
             The Market is built around one simple idea: <b>COM CARDS SHOULD HAVE REAL DEMAND</b> — and that demand should
             route through <b>$COMCOIN</b>. Creating, trading, and protecting cards will be paid in <b>$COMCOIN</b>, with a
@@ -1057,7 +1054,8 @@
         </div>
       </div>
 
-      <!-- ✅ ONLY main.js (Option B1: no vendor, no CDN) -->
+      <!-- ✅ Option B: local vendor file FIRST -->
+      <script src="/vendor/bs58.min.js"></script>
       <script type="module" src="/main.js"></script>
     </div>
   </div>

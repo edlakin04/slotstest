@@ -23,6 +23,36 @@ function getIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 5 } = {}) {
+  // Basic sanity
+  if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
+    const err = new Error("Bad request");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Minute bucket (UTC)
+  // Using timestamptz, so we create a bucket like 2025-12-26 19:22:00+00
+  const rows = await sql`
+    insert into ip_rate_limits (ip, bucket_utc, hits)
+    values (
+      ${ip},
+      date_trunc('minute', (now() at time zone 'utc')),
+      1
+    )
+    on conflict (ip, bucket_utc)
+    do update set hits = ip_rate_limits.hits + 1
+    returning hits
+  `;
+
+  const hits = Number(rows?.[0]?.hits ?? 0);
+  if (hits > limitPerMinute) {
+    const err = new Error("Rate limited");
+    err.statusCode = 429;
+    throw err;
+  }
+}
+
 async function getComcoinBalanceUiAmount(pubkey) {
   const RPC = process.env.HELIUS_RPC_URL;
   const MINT = process.env.COMCOIN_MINT;
@@ -91,6 +121,10 @@ export default async function handler(req, res) {
     requireEnv("HELIUS_RPC_URL");
     requireEnv("COMCOIN_MINT");
 
+    // ✅ IP rate limit (protect spend, runs before OpenAI)
+    const ip = getIp(req);
+    await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 5 }); // change 5 to whatever you want
+
     const body = await readJson(req, { maxBytes: 20_000 });
     const { pubkey, message, signature } = body || {};
 
@@ -115,14 +149,12 @@ export default async function handler(req, res) {
     const bal = await getComcoinBalanceUiAmount(pubkey);
 
     // Set your threshold here:
-    // - if you truly want "any amount", use >= 0 (not recommended)
-    // - typical is >= 1
+    // - recommended: >= 1
     if (bal < 1) {
       return j(res, 403, { error: "Hold $COMCOIN to generate" });
     }
 
-    // ✅ DB-backed daily lock BEFORE OpenAI (prevents spend races)
-    // If a lock row already exists for this wallet+day, we return 429 immediately.
+    // ✅ DB-backed daily lock BEFORE OpenAI (prevents race spend)
     try {
       await sql`
         insert into daily_generate_locks (owner_wallet, gen_day_utc)
@@ -135,12 +167,6 @@ export default async function handler(req, res) {
         return j(res, 429, { error: "Daily generate limit reached" });
       }
       throw e;
-    }
-
-    // (Optional) best-effort ip sanity
-    const ip = getIp(req);
-    if (typeof ip === "string" && ip.length > 200) {
-      return j(res, 400, { error: "Bad request" });
     }
 
     const category = pick(["animal", "tech billionaire", "celebrity", "politician"]);

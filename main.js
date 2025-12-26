@@ -100,6 +100,19 @@ let cardDetailsReqToken = 0;
 /* prevent image refresh on details updates */
 let currentCardImageBase = null;
 
+/* ✅ NEW: local “voted today” memory so details page doesn’t revert status */
+const votedTodayLocal = new Set(); // key = `${wallet}|${cardId}|${UTC_DAY}`
+function utcDayStr(){ return new Date().toISOString().slice(0,10); }
+function voteKey(wallet, cardId){ return `${wallet}|${cardId}|${utcDayStr()}`; }
+function markVotedToday(wallet, cardId){ if (wallet && cardId) votedTodayLocal.add(voteKey(wallet, cardId)); }
+function hasVotedToday(wallet, cardId){ return !!wallet && !!cardId && votedTodayLocal.has(voteKey(wallet, cardId)); }
+function setDetailsVotePill(cardId){
+  if (!cardVoteStatusPill) return;
+  if (!publicKeyBase58) cardVoteStatusPill.textContent = "CONNECT TO VOTE";
+  else if (hasVotedToday(publicKeyBase58, cardId)) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
+  else cardVoteStatusPill.textContent = "1 VOTE / DAY";
+}
+
 /* ---------- ranks ---------- */
 const RANKS = [
   { name: "Dust", min: 0 },
@@ -367,6 +380,9 @@ async function connectPhantom(opts) {
   setConnectedUI(true);
   await refreshBalanceAndRank();
   prefetchMyCards();
+
+  // ✅ when connecting, refresh details pill if user is on a card already
+  if (currentCardId) setDetailsVotePill(currentCardId);
 }
 
 btnConnect && (btnConnect.onclick = async () => {
@@ -398,6 +414,9 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   setConnectedUI(false);
   setMsg("");
   setCardsMsg(VOTE_RULE_TEXT, "");
+
+  // ✅ details pill becomes connect-to-vote
+  if (currentCardId) setDetailsVotePill(currentCardId);
 });
 
 /* ---------- balance & rank ---------- */
@@ -766,8 +785,13 @@ async function voteCard(cardId, vote, pillEl) {
 
     updateCachesAfterVote(cardId, up, down);
 
+    // ✅ mark locally so details page doesn't revert back to "SIGN TO VOTE…"
+    markVotedToday(publicKeyBase58, cardId);
+
     if (onDetails) {
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
+      setCardMsg("VOTE LOCKED FOR TODAY.", "ok");
+
       if (currentCardId && currentCardId === cardId) {
         setTimeout(() => loadCardDetails(cardId, { silent: true, forceImage: false }), 400);
       }
@@ -782,7 +806,9 @@ async function voteCard(cardId, vote, pillEl) {
       raw;
 
     if (onDetails) {
-      if (cardVoteStatusPill) cardVoteStatusPill.textContent = "1 VOTE / DAY";
+      // if backend says limit, keep "VOTE USED"
+      if (nicer.toLowerCase().includes("vote limit")) markVotedToday(publicKeyBase58, cardId);
+      setDetailsVotePill(cardId);
       setCardMsg(nicer, "bad");
     } else {
       setActiveCardsMessage(nicer, "bad");
@@ -966,7 +992,9 @@ async function openCardDetails(cardId) {
     cardImg.removeAttribute("src");
     cardImg.style.visibility = "hidden";
   }
-  if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+
+  // ✅ use local memory to decide label
+  setDetailsVotePill(cardId);
   setCardMsg("", "");
 
   await loadCardDetails(cardId, { silent: true, token: myToken, forceImage: true });
@@ -983,12 +1011,7 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* ✅ FIXED: NORMAL LINE CHART
-   - Starts at bottom-left at value 0
-   - Smooth polyline (no right angles)
-   - Never goes above 3/4 height (topLimit)
-   - Uses last 50 points, evenly spaced
-*/
+/* ✅ FIXED: NORMAL LINE CHART */
 function drawVoteChart(canvas, voteSeries) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -1000,8 +1023,7 @@ function drawVoteChart(canvas, voteSeries) {
   const pad = 14;
   const bottom = h - pad;
 
-  // line should never go above 3/4 height:
-  // meaning topLimit is 25% down from the top drawable area
+  // Never draw above 3/4 height
   const drawableH = (h - 2 * pad);
   const topLimit = pad + drawableH * 0.25;
 
@@ -1021,14 +1043,11 @@ function drawVoteChart(canvas, voteSeries) {
     return;
   }
 
-  // Build values: baseline 0 first, then each cumulative point
   const vals = [0, ...voteSeries.map(p => Number(p.cum || 0))];
 
-  // Ensure 0 is always included in scaling
   let minV = Math.min(...vals);
   let maxV = Math.max(...vals);
 
-  // Add small padding so it doesn't smash top/bottom
   if (minV === maxV) {
     minV -= 1;
     maxV += 1;
@@ -1040,22 +1059,17 @@ function drawVoteChart(canvas, voteSeries) {
 
   const range = (maxV - minV) || 1;
 
-  // Map value to Y where:
-  // maxV -> topLimit (never above)
-  // minV -> bottom
   const yOf = (v) => {
     const t = (v - minV) / range; // 0..1
     return bottom - t * (bottom - topLimit);
   };
 
-  // X evenly spaced by index so it looks like a normal chart
   const n = vals.length;
   const xOfIndex = (i) => {
     if (n <= 1) return pad;
     return pad + (i / (n - 1)) * (w - 2 * pad);
   };
 
-  // Draw the polyline (smooth-ish join)
   ctx.strokeStyle = "rgba(200,255,0,.95)";
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
@@ -1063,12 +1077,9 @@ function drawVoteChart(canvas, voteSeries) {
 
   ctx.beginPath();
   ctx.moveTo(xOfIndex(0), yOf(vals[0]));
-  for (let i = 1; i < n; i++) {
-    ctx.lineTo(xOfIndex(i), yOf(vals[i]));
-  }
+  for (let i = 1; i < n; i++) ctx.lineTo(xOfIndex(i), yOf(vals[i]));
   ctx.stroke();
 
-  // last point marker
   const lx = xOfIndex(n - 1);
   const ly = yOf(vals[n - 1]);
   ctx.fillStyle = "rgba(46,229,157,.95)";
@@ -1091,7 +1102,11 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     const c = data.card;
     const votes = data.lastVotes || [];
-    const series = data.voteSeries || [];
+
+    // ✅ accept either field name from backend
+    // - your earlier backend uses netSeries
+    // - some versions use voteSeries
+    const series = data.voteSeries || data.netSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
 
@@ -1154,13 +1169,14 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
       }
     }
 
-    // ✅ normal line chart
     drawVoteChart(cardChart, series);
 
-    if (cardVoteStatusPill) cardVoteStatusPill.textContent = publicKeyBase58 ? "1 VOTE / DAY" : "CONNECT TO VOTE";
+    // ✅ don’t revert to “SIGN…” or generic text on refresh/poll
+    setDetailsVotePill(cardId);
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;
     setCardMsg(String(e.message || e), "bad");
+    setDetailsVotePill(cardId);
   }
 }
 

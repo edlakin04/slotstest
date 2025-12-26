@@ -751,6 +751,18 @@ async function voteCard(cardId, vote, pillEl) {
       return;
     }
 
+    // ✅ OPTIONAL but safe: don't even request a signature if we already know we voted today
+    if (hasVotedToday(publicKeyBase58, cardId)) {
+      const msg = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
+      if (onDetails) {
+        setDetailsVotePill(cardId);
+        setCardMsg(msg, "bad");
+      } else {
+        setActiveCardsMessage(msg, "bad");
+      }
+      return;
+    }
+
     if (onDetails) {
       setCardMsg("SIGN TO VOTE…", "");
       if (cardVoteStatusPill) cardVoteStatusPill.textContent = "SIGNING…";
@@ -775,6 +787,22 @@ async function voteCard(cardId, vote, pillEl) {
     const text = await res.text();
     let data = null;
     try { data = JSON.parse(text); } catch {}
+
+    // ✅ MAIN FIX: trust server's status code for daily-limit
+    if (res.status === 429) {
+      markVotedToday(publicKeyBase58, cardId);
+
+      const msg = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
+      if (onDetails) {
+        if (cardVoteStatusPill) cardVoteStatusPill.textContent = "VOTE USED (TODAY)";
+        setDetailsVotePill(cardId);
+        setCardMsg(msg, "bad");
+      } else {
+        setActiveCardsMessage(msg, "bad");
+      }
+      return;
+    }
+
     if (!res.ok) throw new Error(data?.error || text || "VOTE FAILED");
 
     const up = Number(data?.upvotes ?? 0);

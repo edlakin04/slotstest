@@ -1,4 +1,34 @@
-import bs58 from "https://cdn.skypack.dev/bs58";
+/* ---------- Option B1: local base58 encode (no deps, launch-safe) ---------- */
+const __B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function base58Encode(bytes) {
+  if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+  if (bytes.length === 0) return "";
+
+  // Count leading zeros.
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+
+  // Convert base256 -> base58
+  const digits = [0];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      const x = digits[j] * 256 + carry;
+      digits[j] = x % 58;
+      carry = (x / 58) | 0;
+    }
+    while (carry) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+
+  // Leading zeros become "1"
+  let out = "";
+  for (let i = 0; i < zeros; i++) out += "1";
+  for (let i = digits.length - 1; i >= 0; i--) out += __B58_ALPHABET[digits[i]];
+  return out;
+}
 
 /* ---------- existing elements ---------- */
 const tabGen = document.getElementById("tabGen");
@@ -381,7 +411,6 @@ async function connectPhantom(opts) {
   await refreshBalanceAndRank();
   prefetchMyCards();
 
-  // ✅ when connecting, refresh details pill if user is on a card already
   if (currentCardId) setDetailsVotePill(currentCardId);
 }
 
@@ -415,7 +444,6 @@ btnDisconnect && (btnDisconnect.onclick = async () => {
   setMsg("");
   setCardsMsg(VOTE_RULE_TEXT, "");
 
-  // ✅ details pill becomes connect-to-vote
   if (currentCardId) setDetailsVotePill(currentCardId);
 });
 
@@ -479,7 +507,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
-    const signature = bs58.encode(signed.signature);
+    const signature = base58Encode(signed.signature);
 
     setMsg("GENERATING IMAGE…");
 
@@ -751,7 +779,6 @@ async function voteCard(cardId, vote, pillEl) {
       return;
     }
 
-    // ✅ OPTIONAL but safe: don't even request a signature if we already know we voted today
     if (hasVotedToday(publicKeyBase58, cardId)) {
       const msg = "VOTE LIMIT FOR THIS CARD REACHED (TODAY).";
       if (onDetails) {
@@ -776,7 +803,7 @@ async function voteCard(cardId, vote, pillEl) {
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
-    const signature = bs58.encode(signed.signature);
+    const signature = base58Encode(signed.signature);
 
     const res = await fetch("/api/vote", {
       method: "POST",
@@ -788,7 +815,6 @@ async function voteCard(cardId, vote, pillEl) {
     let data = null;
     try { data = JSON.parse(text); } catch {}
 
-    // ✅ MAIN FIX: trust server's status code for daily-limit
     if (res.status === 429) {
       markVotedToday(publicKeyBase58, cardId);
 
@@ -812,8 +838,6 @@ async function voteCard(cardId, vote, pillEl) {
     if (pillEl) pillEl.textContent = `SCORE: ${score}  (▲${up} ▼${down})`;
 
     updateCachesAfterVote(cardId, up, down);
-
-    // ✅ mark locally so details page doesn't revert back to "SIGN TO VOTE…"
     markVotedToday(publicKeyBase58, cardId);
 
     if (onDetails) {
@@ -834,7 +858,6 @@ async function voteCard(cardId, vote, pillEl) {
       raw;
 
     if (onDetails) {
-      // if backend says limit, keep "VOTE USED"
       if (nicer.toLowerCase().includes("vote limit")) markVotedToday(publicKeyBase58, cardId);
       setDetailsVotePill(cardId);
       setCardMsg(nicer, "bad");
@@ -1021,7 +1044,6 @@ async function openCardDetails(cardId) {
     cardImg.style.visibility = "hidden";
   }
 
-  // ✅ use local memory to decide label
   setDetailsVotePill(cardId);
   setCardMsg("", "");
 
@@ -1029,7 +1051,6 @@ async function openCardDetails(cardId) {
   startCardPolling(cardId);
 }
 
-/* detail page vote buttons */
 btnCardVoteUp && (btnCardVoteUp.onclick = async () => {
   if (!currentCardId) return;
   await voteCard(currentCardId, +1, cardScorePill);
@@ -1039,7 +1060,7 @@ btnCardVoteDown && (btnCardVoteDown.onclick = async () => {
   await voteCard(currentCardId, -1, cardScorePill);
 });
 
-/* ✅ FIXED: NORMAL LINE CHART */
+/* ---------- chart ---------- */
 function drawVoteChart(canvas, voteSeries) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -1051,11 +1072,9 @@ function drawVoteChart(canvas, voteSeries) {
   const pad = 14;
   const bottom = h - pad;
 
-  // Never draw above 3/4 height
   const drawableH = (h - 2 * pad);
   const topLimit = pad + drawableH * 0.25;
 
-  // axes
   ctx.strokeStyle = "rgba(180,255,210,.18)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1088,7 +1107,7 @@ function drawVoteChart(canvas, voteSeries) {
   const range = (maxV - minV) || 1;
 
   const yOf = (v) => {
-    const t = (v - minV) / range; // 0..1
+    const t = (v - minV) / range;
     return bottom - t * (bottom - topLimit);
   };
 
@@ -1130,10 +1149,6 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
 
     const c = data.card;
     const votes = data.lastVotes || [];
-
-    // ✅ accept either field name from backend
-    // - your earlier backend uses netSeries
-    // - some versions use voteSeries
     const series = data.voteSeries || data.netSeries || [];
 
     if (cardTitle) cardTitle.textContent = (c?.name ? String(c.name).toUpperCase() : "COM CARD");
@@ -1198,12 +1213,9 @@ async function loadCardDetails(cardId, { silent = true, token = null, forceImage
     }
 
     drawVoteChart(cardChart, series);
+    setDetailsVotePill(cardId);
 
-// ✅ don’t revert to “SIGN…” or generic text on refresh/poll
-setDetailsVotePill(cardId);
-
-// ✅ FIX: clear “LOADING CARD DETAILS…” after manual refresh succeeds
-if (!silent) setCardMsg("", "");
+    if (!silent) setCardMsg("", "");
 
   } catch (e) {
     if (myToken !== cardDetailsReqToken) return;

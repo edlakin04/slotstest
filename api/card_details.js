@@ -18,23 +18,32 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Recent votes (last 50) from votes table
+    // Recent vote events (last 50)
     const votes = await sql`
       select voter_wallet, vote, created_at
-      from votes
+      from vote_events
       where card_id = ${id}
       order by created_at desc
       limit 50
     `;
 
-    // ✅ Net series based on the same last 50 votes (oldest -> newest) for a sliding graph
-    const votesAsc = [...(votes || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    // Line series based on last 50 votes:
+    // build chronological order so the line "walks" up/down
+    const seriesRows = await sql`
+      select vote, created_at
+      from vote_events
+      where card_id = ${id}
+      order by created_at desc
+      limit 50
+    `;
+
+    const chron = (seriesRows || []).slice().reverse(); // oldest -> newest
     let cum = 0;
-    const series = votesAsc.map((r) => {
+    const voteSeries = chron.map((r) => {
       cum += Number(r.vote || 0);
       return {
-        t: r.created_at,
-        v: Number(r.vote || 0),
+        t: r.created_at,     // optional
+        step: Number(r.vote || 0),
         cum
       };
     });
@@ -59,10 +68,9 @@ export default async function handler(req, res) {
         vote: Number(v.vote || 0),
         created_at: v.created_at
       })),
-      netSeries: series
+      voteSeries
     });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });
   }
 }
-

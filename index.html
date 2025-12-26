@@ -127,13 +127,21 @@
     }
 
     .brand{ display:flex; align-items:center; gap:12px; min-width:0; }
+
+    /* ✅ LOGO NOW USES /logo.png */
     .logo{
-      width:44px; height:44px;
+      width:44px;
+      height:44px;
       border: 4px solid var(--border);
-      background: linear-gradient(135deg, rgba(46,229,157,.95), rgba(200,255,0,.75));
+      background: rgba(0,0,0,.35);
       box-shadow: 0 8px 0 rgba(0,0,0,.45);
       flex:0 0 auto;
+
+      object-fit: contain;
+      image-rendering: pixelated;
+      display:block;
     }
+
     .brandName{
       font-size: 12px;
       letter-spacing:.18em;
@@ -786,7 +794,9 @@
 
       <div class="topbar px-border">
         <div class="brand">
-          <div class="logo" aria-hidden="true"></div>
+          <!-- ✅ SWAPPED FROM GREEN BLOCK TO IMAGE. Put logo.png in repo root -->
+          <img class="logo" src="/logo.png" alt="COM COIN logo" />
+
           <div style="min-width:0">
             <p class="brandName">COM COIN</p>
             <div class="brandTag">$COMCOIN</div>

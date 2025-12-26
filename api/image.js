@@ -12,6 +12,9 @@ export default async function handler(req, res) {
     const id = String(req.query?.id || "").trim();
     if (!id) return j(res, 400, { error: "Missing id" });
 
+    // ✅ basic id sanity (prevents log spam / weird payloads)
+    if (!/^CC_[A-Z0-9_]+$/.test(id)) return j(res, 400, { error: "Bad id" });
+
     // Look up stored path in DB (we store path like `${pubkey}/${cardId}.png`)
     const rows = await sql`
       select image_url
@@ -30,22 +33,22 @@ export default async function handler(req, res) {
     const bucket = process.env.SUPABASE_BUCKET;
 
     const { data, error } = await supabase.storage.from(bucket).download(path);
-    if (error) throw new Error(`Supabase download failed: ${error.message}`);
+    if (error) throw new Error("Supabase download failed");
     if (!data) throw new Error("No data from storage");
 
     const ab = await data.arrayBuffer();
     const buf = Buffer.from(ab);
 
-    // Cache hard at edge + browser (fast refresh)
+    // ✅ Cache hard (these images never change after mint)
     res.setHeader("Content-Type", "image/png");
-    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800");
+    res.setHeader("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable");
 
-    // Simple ETag so browser can revalidate cheaply
+    // ✅ slightly better ETag
     res.setHeader("ETag", `"${id}-${buf.length}"`);
 
     res.statusCode = 200;
     return res.end(buf);
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    return j(res, 500, { error: "Server error" });
   }
 }

@@ -19,8 +19,7 @@ export default async function handler(req, res) {
     const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
-    // Enforce: 1 vote per UTC day per wallet per card
-    // (vote_day_utc is generated from created_at, so compare against UTC today)
+    // Optional fast pre-check (nice error before insert attempt)
     const already = await sql`
       select 1
       from votes
@@ -33,11 +32,22 @@ export default async function handler(req, res) {
       return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
 
-    // Insert vote event
-    await sql`
-      insert into votes (card_id, voter_wallet, vote)
-      values (${cardId}, ${pubkey}, ${v})
-    `;
+    // Insert vote event (unique index enforces 1/day even in race conditions)
+    try {
+      await sql`
+        insert into votes (card_id, voter_wallet, vote)
+        values (${cardId}, ${pubkey}, ${v})
+      `;
+    } catch (e) {
+      // Handle unique constraint violation cleanly
+      const msg = String(e?.message || e);
+      const code = e?.code; // Postgres error code (23505 for unique violation)
+
+      if (code === "23505" || msg.toLowerCase().includes("duplicate key")) {
+        return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
+      }
+      throw e;
+    }
 
     // Update card totals
     const upDelta = v === 1 ? 1 : 0;
@@ -51,14 +61,11 @@ export default async function handler(req, res) {
       returning upvotes, downvotes
     `;
 
-    const { upvotes, downvotes } = updated[0];
+    const upvotes = Number(updated?.[0]?.upvotes ?? 0);
+    const downvotes = Number(updated?.[0]?.downvotes ?? 0);
+
     return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
   } catch (e) {
-    // If somehow unique index trips, show the nice message
-    const msg = String(e?.message || e);
-    if (msg.toLowerCase().includes("uq_votes_card_wallet_day") || msg.toLowerCase().includes("duplicate")) {
-      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-    }
-    return j(res, 500, { error: msg });
+    return j(res, 500, { error: String(e?.message || e) });
   }
 }

@@ -18,8 +18,8 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // ✅ Recent votes from the real table: votes
-    const votesDesc = await sql`
+    // ✅ Recent votes (last 50) from votes table
+    const votes = await sql`
       select voter_wallet, vote, created_at
       from votes
       where card_id = ${id}
@@ -27,15 +27,14 @@ export default async function handler(req, res) {
       limit 50
     `;
 
-    // For chart (oldest → newest)
-    const votesAsc = [...(votesDesc || [])].reverse();
-
-    // cumulative series for last 50 votes
+    // ✅ Net series based on the same last 50 votes (oldest -> newest) for a sliding graph
+    const votesAsc = [...(votes || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     let cum = 0;
-    const voteSeries = (votesAsc || []).map((v) => {
-      cum += Number(v.vote || 0);
+    const series = votesAsc.map((r) => {
+      cum += Number(r.vote || 0);
       return {
-        t: new Date(v.created_at).getTime(),
+        t: r.created_at,
+        v: Number(r.vote || 0),
         cum
       };
     });
@@ -55,14 +54,15 @@ export default async function handler(req, res) {
         created_at: c.created_at,
         imageUrl: `/api/image?id=${encodeURIComponent(c.id)}`
       },
-      lastVotes: (votesDesc || []).map(v => ({
+      lastVotes: (votes || []).map(v => ({
         voter_wallet: v.voter_wallet,
         vote: Number(v.vote || 0),
         created_at: v.created_at
       })),
-      voteSeries
+      netSeries: series
     });
   } catch (e) {
     return j(res, 500, { error: String(e?.message || e) });
   }
 }
+

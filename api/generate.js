@@ -10,6 +10,10 @@ import {
   supabase
 } from "./_lib.js";
 
+function utcDayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
@@ -22,7 +26,16 @@ export default async function handler(req, res) {
 
     const body = await readJson(req);
     const { pubkey, message, signature } = body || {};
-    if (!pubkey || !message || !signature) return j(res, 400, { error: "Missing pubkey/message/signature" });
+    if (!pubkey || !message || !signature) {
+      return j(res, 400, { error: "Missing pubkey/message/signature" });
+    }
+
+    // ✅ Strict server-side message validation (prevents signing arbitrary text)
+    const today = utcDayString();
+    const expectedMessage = `COM COIN daily meme | ${today}`;
+    if (message !== expectedMessage) {
+      return j(res, 400, { error: "Invalid generate message" });
+    }
 
     verifyPhantomSign({ pubkey, message, signature });
 
@@ -52,7 +65,6 @@ export default async function handler(req, res) {
 
     const name = randomMemeName();
 
-    // store path in DB (private)
     await sql`
       insert into com_cards (id, owner_wallet, name, image_url)
       values (${cardId}, ${pubkey}, ${name}, ${path})

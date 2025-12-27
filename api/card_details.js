@@ -1,5 +1,9 @@
 import { j, requireEnv, sql } from "./_lib.js";
 
+function isCardId(id) {
+  return typeof id === "string" && /^CC_[A-Z0-9_]+$/.test(id);
+}
+
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
@@ -8,6 +12,7 @@ export default async function handler(req, res) {
 
     const id = String(req.query?.id || "").trim();
     if (!id) return j(res, 400, { error: "Missing id" });
+    if (!isCardId(id)) return j(res, 400, { error: "Bad id" });
 
     const cardRows = await sql`
       select id, owner_wallet, name, upvotes, downvotes, created_at
@@ -18,7 +23,6 @@ export default async function handler(req, res) {
     const c = cardRows?.[0];
     if (!c) return j(res, 404, { error: "Card not found" });
 
-    // Most recent 50 votes (DESC for list)
     const lastVotesRows = await sql`
       select voter_wallet, vote, created_at
       from votes
@@ -27,8 +31,6 @@ export default async function handler(req, res) {
       limit 50
     `;
 
-    // For the chart we want chronological order (ASC) using the same last 50 votes.
-    // Easiest: query ASC with limit 50 by sorting DESC in a subquery then re-sorting ASC.
     const chartRows = await sql`
       select voter_wallet, vote, created_at
       from (
@@ -41,15 +43,10 @@ export default async function handler(req, res) {
       order by created_at asc
     `;
 
-    // Build voteSeries as “trading style” step-by-step cumulative points over the last 50 votes.
     let cum = 0;
     const voteSeries = (chartRows || []).map((r) => {
       cum += Number(r.vote || 0);
-      return {
-        t: r.created_at,        // keep time for spacing if you want later
-        vote: Number(r.vote || 0),
-        cum
-      };
+      return { t: r.created_at, vote: Number(r.vote || 0), cum };
     });
 
     const up = Number(c.upvotes || 0);
@@ -75,6 +72,6 @@ export default async function handler(req, res) {
       voteSeries
     });
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    return j(res, 500, { error: "Server error" });
   }
 }

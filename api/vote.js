@@ -17,7 +17,7 @@ function getIp(req) {
 
 // ✅ IP rate limit using your existing ip_rate_limits table
 // We prefix the IP so vote limits don't collide with generate limits.
-async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vote:" } = {}) {
+async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 15, prefix = "vote:" } = {}) {
   // Basic sanity
   if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
     const err = new Error("Bad request");

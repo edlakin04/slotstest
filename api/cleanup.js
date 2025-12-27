@@ -1,27 +1,27 @@
 import { j, requireEnv, sql } from "./_lib.js";
 
-function isVercelCron(req) {
-  const ua = String(req.headers["user-agent"] || "").toLowerCase();
-  // Vercel cron requests have a vercel-cron user agent
-  return ua.includes("vercel-cron");
+function isAuthorized(req) {
+  const secret = process.env.CRON_SECRET || "";
+  const auth = String(req.headers.authorization || "");
+  // Expect: Authorization: Bearer <secret>
+  return secret.length > 0 && auth === `Bearer ${secret}`;
 }
 
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
+    requireEnv("CRON_SECRET");
 
-    if (req.method !== "GET") return j(res, 405, { error: "Method not allowed" });
+    // Prefer POST so random crawlers don't trigger it
+    if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
 
-    // Cron-only access
-    if (!isVercelCron(req)) return j(res, 401, { error: "Unauthorized" });
+    if (!isAuthorized(req)) return j(res, 401, { error: "Unauthorized" });
 
-    // Keep only last 2 days of per-minute IP buckets
     const ipDel = await sql`
       delete from ip_rate_limits
       where bucket_utc < (now() at time zone 'utc') - interval '2 days'
     `;
 
-    // Keep only last 60 days of generate locks
     const genDel = await sql`
       delete from daily_generate_locks
       where gen_day_utc < ((now() at time zone 'utc')::date - 60)

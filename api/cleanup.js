@@ -3,7 +3,6 @@ import { j, requireEnv, sql } from "./_lib.js";
 function isAuthorized(req) {
   const secret = process.env.CRON_SECRET || "";
   const auth = String(req.headers.authorization || "");
-  // Expect: Authorization: Bearer <secret>
   return secret.length > 0 && auth === `Bearer ${secret}`;
 }
 
@@ -12,9 +11,7 @@ export default async function handler(req, res) {
     requireEnv("NEON_DATABASE_URL");
     requireEnv("CRON_SECRET");
 
-    // Prefer POST so random crawlers don't trigger it
-    if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
-
+    if (req.method !== "GET") return j(res, 405, { error: "Method not allowed" });
     if (!isAuthorized(req)) return j(res, 401, { error: "Unauthorized" });
 
     const ipDel = await sql`

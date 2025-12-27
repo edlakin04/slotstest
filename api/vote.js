@@ -1,10 +1,18 @@
-// api/vote.js
-
-import { j, readJson, verifyPhantomSign, sql, requireEnv } from "./_lib.js";
+import {
+  j,
+  readJson,
+  verifyPhantomSign,
+  sql,
+  requireEnv,
+  consumeNonce
+} from "./_lib.js";
 
 function utcDayString() {
-  // UTC date in YYYY-MM-DD (matches frontend new Date().toISOString().slice(0,10))
   return new Date().toISOString().slice(0, 10);
+}
+
+function getOrigin() {
+  return requireEnv("SITE_ORIGIN");
 }
 
 function getIp(req) {
@@ -15,15 +23,11 @@ function getIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
-// ✅ Tight card id validation (prevents weird payloads / log spam)
 function isCardId(id) {
   return typeof id === "string" && /^CC_[A-Z0-9_]+$/.test(id);
 }
 
-// ✅ IP rate limit using your existing ip_rate_limits table
-// We prefix the IP so vote limits don't collide with generate limits.
 async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vote:" } = {}) {
-  // Basic sanity
   if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
     const err = new Error("Bad request");
     err.statusCode = 400;
@@ -55,21 +59,22 @@ async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vo
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
+    requireEnv("UPSTASH_REDIS_REST_URL");
+    requireEnv("UPSTASH_REDIS_REST_TOKEN");
+    requireEnv("SITE_ORIGIN");
 
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
 
-    // ✅ IP rate limit (vote spam protection)
-    // Tune this number as you like. 30/minute per IP is a common safe default.
     const ip = getIp(req);
     await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 30, prefix: "vote:" });
 
     const body = await readJson(req);
-    const { cardId, vote, pubkey, message, signature } = body || {};
-    if (!cardId || !pubkey || !message || !signature) {
+    const { cardId, vote, pubkey, message, signature, nonce } = body || {};
+
+    if (!cardId || !pubkey || !message || !signature || !nonce) {
       return j(res, 400, { error: "Missing fields" });
     }
 
-    // ✅ cardId sanity
     if (!isCardId(String(cardId).trim())) {
       return j(res, 400, { error: "Bad cardId" });
     }
@@ -77,37 +82,23 @@ export default async function handler(req, res) {
     const v = Number(vote);
     if (v !== 1 && v !== -1) return j(res, 400, { error: "vote must be 1 or -1" });
 
-    // ✅ Strict server-side message validation (prevents signing arbitrary text)
     const today = utcDayString();
-    const expectedMessage = `COM COIN vote | ${cardId} | ${v} | ${today}`;
+    const origin = getOrigin();
+
+    // ✅ New strict message format with nonce + origin binding
+    const expectedMessage = `COM COIN|vote|${origin}|${cardId}|${v}|${today}|${nonce}`;
     if (message !== expectedMessage) {
       return j(res, 400, { error: "Invalid vote message" });
     }
 
-    // Verify Phantom signature (authenticates pubkey owns signature for message)
     verifyPhantomSign({ pubkey, message, signature });
 
-    // Ensure card exists (keeps your current 404 behavior)
+    // ✅ Consume nonce (one-time use)
+    await consumeNonce({ action: "vote", wallet: pubkey, nonce });
+
     const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
-    // Optional fast pre-check (nice error before insert attempt)
-    const already = await sql`
-      select 1
-      from votes
-      where card_id = ${cardId}
-        and voter_wallet = ${pubkey}
-        and vote_day_utc = ((now() at time zone 'utc')::date)
-      limit 1
-    `;
-    if (already?.length) {
-      return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
-    }
-
-    // ✅ Atomic insert + counter update:
-    // - If insert succeeds, update happens in the same statement.
-    // - If insert fails (unique violation), nothing is updated.
-    // - Prevents drift between votes event log and com_cards totals.
     try {
       const rows = await sql`
         with ins as (
@@ -131,24 +122,18 @@ export default async function handler(req, res) {
       return j(res, 200, { ok: true, upvotes, downvotes, score: upvotes - downvotes });
     } catch (e) {
       const msg = String(e?.message || e);
-      const code = e?.code; // Postgres error code
+      const code = e?.code;
 
-      // Unique constraint (1 vote per UTC day per wallet per card)
       if (code === "23505" || msg.toLowerCase().includes("duplicate key")) {
         return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
       }
-
-      // FK violation (card missing) - should be rare due to pre-check, but safe
       if (code === "23503") {
         return j(res, 404, { error: "Card not found" });
       }
-
       throw e;
     }
   } catch (e) {
     const status = Number(e?.statusCode || 500);
-
-    // ✅ Don't leak internals
     const msg =
       status === 400 ? (e?.message || "Bad request") :
       status === 401 ? "Unauthorized" :

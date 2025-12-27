@@ -1,5 +1,9 @@
 import { j, requireEnv, sql } from "./_lib.js";
 
+function isCardId(id) {
+  return typeof id === "string" && /^CC_[A-Z0-9_]+$/.test(id);
+}
+
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
@@ -8,6 +12,7 @@ export default async function handler(req, res) {
 
     const id = String(req.query?.id || "").trim();
     if (!id) return j(res, 400, { error: "Missing id" });
+    if (!isCardId(id)) return j(res, 400, { error: "Bad id" });
 
     const rows = await sql`
       select id, owner_wallet, name, upvotes, downvotes, created_at
@@ -26,11 +31,11 @@ export default async function handler(req, res) {
       downvotes: Number(r.downvotes || 0),
       score: Number(r.upvotes || 0) - Number(r.downvotes || 0),
       created_at: r.created_at,
-      imageUrl: `/api/image?id=${encodeURIComponent(r.id)}`,
+      imageUrl: `/api/image?id=${encodeURIComponent(r.id)}`
     };
 
     return j(res, 200, { ok: true, item });
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    return j(res, 500, { error: "Server error" });
   }
 }

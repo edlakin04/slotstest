@@ -8,17 +8,11 @@ import {
   pick,
   sql,
   supabase,
-  isBase58Pubkey,
-  consumeNonce
+  isBase58Pubkey
 } from "./_lib.js";
 
 function utcDayString() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
-}
-
-function getOrigin() {
-  // hard bind signatures to YOUR site
-  return requireEnv("SITE_ORIGIN");
 }
 
 function getIp(req) {
@@ -70,7 +64,11 @@ async function getComcoinBalanceUiAmount(pubkey) {
       jsonrpc: "2.0",
       id: "comcoin_balance",
       method: "getTokenAccountsByOwner",
-      params: [pubkey, { mint: MINT }, { encoding: "jsonParsed" }]
+      params: [
+        pubkey,
+        { mint: MINT },
+        { encoding: "jsonParsed" }
+      ]
     })
   });
 
@@ -90,7 +88,7 @@ async function generateOpenAiPngBase64(apiKey, prompt) {
   const r = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -123,45 +121,38 @@ export default async function handler(req, res) {
     requireEnv("SUPABASE_BUCKET");
     requireEnv("HELIUS_RPC_URL");
     requireEnv("COMCOIN_MINT");
-    requireEnv("UPSTASH_REDIS_REST_URL");
-    requireEnv("UPSTASH_REDIS_REST_TOKEN");
-    requireEnv("SITE_ORIGIN");
 
+    // ✅ IP rate limit BEFORE spend
     const ip = getIp(req);
     await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 5, prefix: "gen:" });
 
     const body = await readJson(req, { maxBytes: 20_000 });
-    const { pubkey, message, signature, nonce } = body || {};
+    const { pubkey, message, signature } = body || {};
 
-    if (!pubkey || !message || !signature || !nonce) {
-      return j(res, 400, { error: "Missing pubkey/message/signature/nonce" });
+    if (!pubkey || !message || !signature) {
+      return j(res, 400, { error: "Missing pubkey/message/signature" });
     }
     if (!isBase58Pubkey(pubkey)) {
       return j(res, 400, { error: "Invalid pubkey" });
     }
 
+    // ✅ Strict message validation
     const today = utcDayString();
-    const origin = getOrigin();
-
-    // ✅ New strict message format with nonce + origin binding
-    const expectedMessage = `COM COIN|generate|${origin}|${today}|${nonce}`;
+    const expectedMessage = `COM COIN daily meme | ${today}`;
     if (message !== expectedMessage) {
       return j(res, 400, { error: "Invalid generate message" });
     }
 
-    // ✅ Verify signature
+    // ✅ Verify Phantom signature
     verifyPhantomSign({ pubkey, message, signature });
 
-    // ✅ Consume nonce (one-time use, prevents replay)
-    await consumeNonce({ action: "generate", wallet: pubkey, nonce });
-
-    // ✅ Holding check
+    // ✅ Server-side holding check
     const bal = await getComcoinBalanceUiAmount(pubkey);
     if (bal < 1) {
       return j(res, 403, { error: "Hold $COMCOIN to generate" });
     }
 
-    // ✅ DB daily lock
+    // ✅ DB-backed daily lock BEFORE OpenAI (prevents double spend)
     pubkeyForRollback = pubkey;
     try {
       await sql`
@@ -177,7 +168,7 @@ export default async function handler(req, res) {
       throw e;
     }
 
-    // ✅ Generate + store + insert
+    // ✅ Everything below here must rollback the lock if it fails.
     try {
       const category = pick(["animal", "tech billionaire", "celebrity", "politician"]);
       const prompt = [
@@ -216,7 +207,7 @@ export default async function handler(req, res) {
         imageUrl: `/api/image?id=${encodeURIComponent(cardId)}`
       });
     } catch (e) {
-      // rollback daily lock
+      // ✅ rollback daily lock so user isn't blocked if OpenAI/upload/db insert fails
       try {
         await sql`
           delete from daily_generate_locks

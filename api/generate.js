@@ -23,20 +23,19 @@ function getIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
-async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 5 } = {}) {
-  // Basic sanity
+async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 5, prefix = "gen:" } = {}) {
   if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
     const err = new Error("Bad request");
     err.statusCode = 400;
     throw err;
   }
 
-  // Minute bucket (UTC)
-  // Using timestamptz, so we create a bucket like 2025-12-26 19:22:00+00
+  const scopedIp = `${prefix}${ip}`;
+
   const rows = await sql`
     insert into ip_rate_limits (ip, bucket_utc, hits)
     values (
-      ${ip},
+      ${scopedIp},
       date_trunc('minute', (now() at time zone 'utc')),
       1
     )
@@ -110,6 +109,8 @@ async function generateOpenAiPngBase64(apiKey, prompt) {
 }
 
 export default async function handler(req, res) {
+  let pubkeyForRollback = null;
+
   try {
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
 
@@ -121,9 +122,9 @@ export default async function handler(req, res) {
     requireEnv("HELIUS_RPC_URL");
     requireEnv("COMCOIN_MINT");
 
-    // ✅ IP rate limit (protect spend, runs before OpenAI)
+    // ✅ IP rate limit BEFORE spend
     const ip = getIp(req);
-    await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 5 }); // change 5 to whatever you want
+    await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 5, prefix: "gen:" });
 
     const body = await readJson(req, { maxBytes: 20_000 });
     const { pubkey, message, signature } = body || {};
@@ -145,16 +146,14 @@ export default async function handler(req, res) {
     // ✅ Verify Phantom signature
     verifyPhantomSign({ pubkey, message, signature });
 
-    // ✅ Server-side holding check (prevents bypassing frontend)
+    // ✅ Server-side holding check
     const bal = await getComcoinBalanceUiAmount(pubkey);
-
-    // Set your threshold here:
-    // - recommended: >= 1
     if (bal < 1) {
       return j(res, 403, { error: "Hold $COMCOIN to generate" });
     }
 
-    // ✅ DB-backed daily lock BEFORE OpenAI (prevents race spend)
+    // ✅ DB-backed daily lock BEFORE OpenAI (prevents double spend)
+    pubkeyForRollback = pubkey;
     try {
       await sql`
         insert into daily_generate_locks (owner_wallet, gen_day_utc)
@@ -169,42 +168,55 @@ export default async function handler(req, res) {
       throw e;
     }
 
-    const category = pick(["animal", "tech billionaire", "celebrity", "politician"]);
-    const prompt = [
-      "Create a pixel art meme image, 1:1 square, crisp pixelated style.",
-      `Subject category: ${category}.`,
-      "Make it funny and memecoin-coded. Keep it PG.",
-      "IMPORTANT: overlay pixelated text 'COM COIN' at the bottom of the image, same position every time, centered, no dark strip, just text overlay.",
-      "No watermarks, no extra text besides the 'COM COIN' stamp.",
-      "High contrast, punchy, vibrant meme vibe."
-    ].join(" ");
+    // ✅ Everything below here must rollback the lock if it fails.
+    try {
+      const category = pick(["animal", "tech billionaire", "celebrity", "politician"]);
+      const prompt = [
+        "Create a pixel art meme image, 1:1 square, crisp pixelated style.",
+        `Subject category: ${category}.`,
+        "Make it funny and memecoin-coded. Keep it PG.",
+        "IMPORTANT: overlay pixelated text 'COM COIN' at the bottom of the image, same position every time, centered, no dark strip, just text overlay.",
+        "No watermarks, no extra text besides the 'COM COIN' stamp.",
+        "High contrast, punchy, vibrant meme vibe."
+      ].join(" ");
 
-    const pngB64 = await generateOpenAiPngBase64(process.env.OPENAI_API_KEY, prompt);
+      const pngB64 = await generateOpenAiPngBase64(process.env.OPENAI_API_KEY, prompt);
 
-    const bucket = process.env.SUPABASE_BUCKET;
-    const cardId = makeCardId();
-    const path = `${pubkey}/${cardId}.png`;
-    const bytes = Buffer.from(pngB64, "base64");
+      const bucket = process.env.SUPABASE_BUCKET;
+      const cardId = makeCardId();
+      const path = `${pubkey}/${cardId}.png`;
+      const bytes = Buffer.from(pngB64, "base64");
 
-    const { error: upErr } = await supabase.storage
-      .from(bucket)
-      .upload(path, bytes, { contentType: "image/png", upsert: true });
+      const { error: upErr } = await supabase.storage
+        .from(bucket)
+        .upload(path, bytes, { contentType: "image/png", upsert: true });
 
-    if (upErr) throw new Error("Supabase upload failed");
+      if (upErr) throw new Error("Supabase upload failed");
 
-    const name = randomMemeName();
+      const name = randomMemeName();
 
-    await sql`
-      insert into com_cards (id, owner_wallet, name, image_url)
-      values (${cardId}, ${pubkey}, ${name}, ${path})
-    `;
+      await sql`
+        insert into com_cards (id, owner_wallet, name, image_url)
+        values (${cardId}, ${pubkey}, ${name}, ${path})
+      `;
 
-    return j(res, 200, {
-      ok: true,
-      cardId,
-      name,
-      imageUrl: `/api/image?id=${encodeURIComponent(cardId)}`
-    });
+      return j(res, 200, {
+        ok: true,
+        cardId,
+        name,
+        imageUrl: `/api/image?id=${encodeURIComponent(cardId)}`
+      });
+    } catch (e) {
+      // ✅ rollback daily lock so user isn't blocked if OpenAI/upload/db insert fails
+      try {
+        await sql`
+          delete from daily_generate_locks
+          where owner_wallet = ${pubkey}
+            and gen_day_utc = ((now() at time zone 'utc')::date)
+        `;
+      } catch {}
+      throw e;
+    }
   } catch (e) {
     const status = Number(e?.statusCode || 500);
 

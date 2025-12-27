@@ -15,9 +15,14 @@ function getIp(req) {
   return req.socket?.remoteAddress || "unknown";
 }
 
+// ✅ Tight card id validation (prevents weird payloads / log spam)
+function isCardId(id) {
+  return typeof id === "string" && /^CC_[A-Z0-9_]+$/.test(id);
+}
+
 // ✅ IP rate limit using your existing ip_rate_limits table
 // We prefix the IP so vote limits don't collide with generate limits.
-async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 10, prefix = "vote:" } = {}) {
+async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vote:" } = {}) {
   // Basic sanity
   if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
     const err = new Error("Bad request");
@@ -62,6 +67,11 @@ export default async function handler(req, res) {
     const { cardId, vote, pubkey, message, signature } = body || {};
     if (!cardId || !pubkey || !message || !signature) {
       return j(res, 400, { error: "Missing fields" });
+    }
+
+    // ✅ cardId sanity
+    if (!isCardId(String(cardId).trim())) {
+      return j(res, 400, { error: "Bad cardId" });
     }
 
     const v = Number(vote);

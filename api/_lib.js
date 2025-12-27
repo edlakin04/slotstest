@@ -2,6 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { createClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
 import bs58 from "bs58";
+import crypto from "crypto";
 
 export const sql = neon(process.env.NEON_DATABASE_URL || "");
 
@@ -39,7 +40,6 @@ export function isBase58Pubkey(s) {
 export function isBase58Signature(s) {
   if (typeof s !== "string") return false;
   const t = s.trim();
-  // base58 signatures typically 64 bytes; string length varies, but this range is safe
   if (t.length < 64 || t.length > 128) return false;
   try {
     const b = bs58.decode(t);
@@ -50,7 +50,6 @@ export function isBase58Signature(s) {
 }
 
 export async function readJson(req, { maxBytes = 40_000 } = {}) {
-  // If platform already parsed:
   if (req.body && typeof req.body === "object") return req.body;
 
   const chunks = [];
@@ -92,7 +91,7 @@ export function verifyPhantomSign({ pubkey, message, signature }) {
     err.statusCode = 400;
     throw err;
   }
-  if (typeof message !== "string" || message.length < 5 || message.length > 200) {
+  if (typeof message !== "string" || message.length < 5 || message.length > 400) {
     const err = new Error("Invalid message");
     err.statusCode = 400;
     throw err;
@@ -110,10 +109,11 @@ export function verifyPhantomSign({ pubkey, message, signature }) {
   }
 }
 
+// ✅ crypto-strong card ID (matches your DB check: ^CC_[A-Z0-9_]+$)
 export function makeCardId() {
-  const t = Date.now().toString(36);
-  const r = Math.random().toString(36).slice(2, 10);
-  return `CC_${t}_${r}`.toUpperCase();
+  // 16 bytes -> 32 hex chars. Only [0-9A-F], safe.
+  const hex = crypto.randomBytes(16).toString("hex").toUpperCase();
+  return `CC_${hex}`;
 }
 
 const ADJ = ["SWEATY","DIAMOND","FERAL","COSMIC","GIGA","BASED","RUGPROOF","JUICED","PIXEL","NEON","CHAOTIC","HYPER"];
@@ -128,4 +128,99 @@ export function randomMemeName() {
 
 export function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/* =========================
+   ✅ Upstash nonce helpers
+   ========================= */
+
+function upstashUrl(path) {
+  const base = requireEnv("UPSTASH_REDIS_REST_URL");
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
+async function upstashFetch(path) {
+  const token = requireEnv("UPSTASH_REDIS_REST_TOKEN");
+  const r = await fetch(upstashUrl(path), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) {
+    const err = new Error("Upstash error");
+    err.statusCode = 500;
+    throw err;
+  }
+  return data;
+}
+
+function nonceKey({ action, wallet, nonce }) {
+  // short + deterministic; keep it simple
+  return `nonce:${action}:${wallet}:${nonce}`;
+}
+
+export function nonceTtlSeconds() {
+  const raw = process.env.NONCE_TTL_SECONDS;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 60 && n <= 3600) return Math.floor(n);
+  return 300; // default 5 min
+}
+
+export function makeNonce() {
+  // URL-safe base64-ish
+  return crypto.randomBytes(18).toString("base64url");
+}
+
+export async function issueNonce({ action, wallet }) {
+  if (typeof action !== "string" || !action) throw new Error("Bad action");
+  if (!isBase58Pubkey(wallet)) {
+    const err = new Error("Invalid pubkey");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nonce = makeNonce();
+  const key = nonceKey({ action, wallet, nonce });
+  const ttl = nonceTtlSeconds();
+
+  // SET key=1 EX ttl NX
+  const data = await upstashFetch(`set/${encodeURIComponent(key)}/1?EX=${ttl}&NX=1`);
+  // Upstash returns { result: "OK" } or { result: null }
+  if (!data || data.result !== "OK") {
+    const err = new Error("Nonce issue failed");
+    err.statusCode = 500;
+    throw err;
+  }
+
+  return { nonce, ttl };
+}
+
+export async function consumeNonce({ action, wallet, nonce }) {
+  if (typeof action !== "string" || !action) {
+    const err = new Error("Bad action");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!isBase58Pubkey(wallet)) {
+    const err = new Error("Invalid pubkey");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (typeof nonce !== "string" || nonce.length < 8 || nonce.length > 120) {
+    const err = new Error("Invalid nonce");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const key = nonceKey({ action, wallet, nonce });
+
+  // Consume by deleting; DEL returns integer count
+  const data = await upstashFetch(`del/${encodeURIComponent(key)}`);
+  const deleted = Number(data?.result ?? 0);
+
+  if (deleted !== 1) {
+    const err = new Error("Nonce expired or already used");
+    err.statusCode = 401;
+    throw err;
+  }
 }

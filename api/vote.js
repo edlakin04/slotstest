@@ -1,6 +1,13 @@
 // api/vote.js
 
-import { j, readJson, verifyPhantomSign, sql, requireEnv } from "./_lib.js";
+import {
+  j,
+  readJson,
+  verifyPhantomSign,
+  sql,
+  requireEnv,
+  isBase58Pubkey
+} from "./_lib.js";
 
 function utcDayString() {
   // UTC date in YYYY-MM-DD (matches frontend new Date().toISOString().slice(0,10))
@@ -11,13 +18,42 @@ function getIp(req) {
   const xf = req.headers["x-forwarded-for"];
   if (typeof xf === "string" && xf.length) return xf.split(",")[0].trim();
   const xr = req.headers["x-real-ip"];
-  if (typeof xr === "string" && xr.length) return xr.trim();
+  if (typeof xr === "string" && xf.length) return xr.trim();
   return req.socket?.remoteAddress || "unknown";
 }
 
 // ✅ Tight card id validation (prevents weird payloads / log spam)
 function isCardId(id) {
   return typeof id === "string" && /^CC_[A-Z0-9_]+$/.test(id);
+}
+
+// ✅ Same COMCOIN holding check logic as generate
+async function getComcoinBalanceUiAmount(pubkey) {
+  const RPC = process.env.HELIUS_RPC_URL;
+  const MINT = process.env.COMCOIN_MINT;
+  if (!RPC || !MINT) throw new Error("Server misconfigured");
+
+  const r = await fetch(RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: "comcoin_balance",
+      method: "getTokenAccountsByOwner",
+      params: [pubkey, { mint: MINT }, { encoding: "jsonParsed" }]
+    })
+  });
+
+  const data = await r.json().catch(() => null);
+  if (!r.ok || data?.error) throw new Error("RPC error");
+
+  const accounts = data?.result?.value || [];
+  let uiAmount = 0;
+  for (const acc of accounts) {
+    const amt = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+    uiAmount += Number(amt || 0);
+  }
+  return uiAmount;
 }
 
 // ✅ IP rate limit using your existing ip_rate_limits table
@@ -55,11 +91,12 @@ async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vo
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
+    requireEnv("HELIUS_RPC_URL");
+    requireEnv("COMCOIN_MINT");
 
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
 
     // ✅ IP rate limit (vote spam protection)
-    // Tune this number as you like. 30/minute per IP is a common safe default.
     const ip = getIp(req);
     await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 30, prefix: "vote:" });
 
@@ -69,8 +106,14 @@ export default async function handler(req, res) {
       return j(res, 400, { error: "Missing fields" });
     }
 
+    // ✅ pubkey sanity (same style as generate)
+    if (!isBase58Pubkey(pubkey)) {
+      return j(res, 400, { error: "Invalid pubkey" });
+    }
+
     // ✅ cardId sanity
-    if (!isCardId(String(cardId).trim())) {
+    const cardIdTrim = String(cardId).trim();
+    if (!isCardId(cardIdTrim)) {
       return j(res, 400, { error: "Bad cardId" });
     }
 
@@ -79,23 +122,29 @@ export default async function handler(req, res) {
 
     // ✅ Strict server-side message validation (prevents signing arbitrary text)
     const today = utcDayString();
-    const expectedMessage = `COM COIN vote | ${cardId} | ${v} | ${today}`;
+    const expectedMessage = `COM COIN vote | ${cardIdTrim} | ${v} | ${today}`;
     if (message !== expectedMessage) {
       return j(res, 400, { error: "Invalid vote message" });
     }
 
-    // Verify Phantom signature (authenticates pubkey owns signature for message)
+    // ✅ Verify Phantom signature (authenticates pubkey owns signature for message)
     verifyPhantomSign({ pubkey, message, signature });
 
+    // ✅ Same server-side holding check as generate
+    const bal = await getComcoinBalanceUiAmount(pubkey);
+    if (bal < 1) {
+      return j(res, 403, { error: "Hold $COMCOIN to vote" });
+    }
+
     // Ensure card exists (keeps your current 404 behavior)
-    const cardRows = await sql`select id from com_cards where id = ${cardId} limit 1`;
+    const cardRows = await sql`select id from com_cards where id = ${cardIdTrim} limit 1`;
     if (!cardRows?.length) return j(res, 404, { error: "Card not found" });
 
     // Optional fast pre-check (nice error before insert attempt)
     const already = await sql`
       select 1
       from votes
-      where card_id = ${cardId}
+      where card_id = ${cardIdTrim}
         and voter_wallet = ${pubkey}
         and vote_day_utc = ((now() at time zone 'utc')::date)
       limit 1
@@ -104,22 +153,19 @@ export default async function handler(req, res) {
       return j(res, 429, { error: "VOTE LIMIT FOR THIS CARD REACHED (TODAY)." });
     }
 
-    // ✅ Atomic insert + counter update:
-    // - If insert succeeds, update happens in the same statement.
-    // - If insert fails (unique violation), nothing is updated.
-    // - Prevents drift between votes event log and com_cards totals.
+    // ✅ Atomic insert + counter update
     try {
       const rows = await sql`
         with ins as (
           insert into votes (card_id, voter_wallet, vote)
-          values (${cardId}, ${pubkey}, ${v})
+          values (${cardIdTrim}, ${pubkey}, ${v})
           returning vote
         ),
         upd as (
           update com_cards
           set upvotes = upvotes + (select case when vote = 1 then 1 else 0 end from ins),
               downvotes = downvotes + (select case when vote = -1 then 1 else 0 end from ins)
-          where id = ${cardId}
+          where id = ${cardIdTrim}
           returning upvotes, downvotes
         )
         select upvotes, downvotes from upd
@@ -152,6 +198,7 @@ export default async function handler(req, res) {
     const msg =
       status === 400 ? (e?.message || "Bad request") :
       status === 401 ? "Unauthorized" :
+      status === 403 ? "Forbidden" :
       status === 413 ? "Request too large" :
       status === 429 ? "Rate limited" :
       "Server error";

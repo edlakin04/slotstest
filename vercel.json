@@ -14,7 +14,10 @@
   "crons": [
     {
       "path": "/api/cleanup",
-      "schedule": "0 4 * * *"
+      "schedule": "0 4 * * *",
+      "headers": {
+        "Authorization": "Bearer ${CRON_SECRET}"
+      }
     }
   ]
 }

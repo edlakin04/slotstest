@@ -298,6 +298,23 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+/* ✅ NEW: nonce/challenge helpers (no other code removed) */
+function siteOrigin() {
+  // must match SITE_ORIGIN on server. Using current origin keeps it stable.
+  return window.location.origin;
+}
+
+async function getNonce(action) {
+  if (!publicKeyBase58) throw new Error("CONNECT WALLET FIRST");
+  const res = await fetch(`/api/challenge?action=${encodeURIComponent(action)}&wallet=${encodeURIComponent(publicKeyBase58)}`);
+  const text = await res.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch {}
+  if (!res.ok) throw new Error(data?.error || text || "FAILED TO GET CHALLENGE");
+  if (!data?.nonce) throw new Error("NO NONCE RETURNED");
+  return data.nonce;
+}
+
 /* ---------- tabs ---------- */
 tabGen && (tabGen.onclick = () => showView("gen"));
 tabRank && (tabRank.onclick = () => showView("rank"));
@@ -471,11 +488,16 @@ btnGenerate && (btnGenerate.onclick = async () => {
     if (btnCopyTweet) btnCopyTweet.disabled = true;
     if (btnDownload) btnDownload.disabled = true;
 
+    setMsg("PREPARING CHALLENGE…");
+    const nonce = await getNonce("generate");
+
     setMsg("SIGN MESSAGE…");
 
     const provider = requirePhantomOrDeepLink();
     const today = new Date().toISOString().slice(0, 10);
-    const message = `COM COIN daily meme | ${today}`;
+
+    // ✅ new message format with origin + nonce (prevents replay)
+    const message = `COM COIN|generate|${siteOrigin()}|${today}|${nonce}`;
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
@@ -486,7 +508,7 @@ btnGenerate && (btnGenerate.onclick = async () => {
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature })
+      body: JSON.stringify({ pubkey: publicKeyBase58, message, signature, nonce })
     });
 
     const rawText = await res.text();
@@ -772,8 +794,12 @@ async function voteCard(cardId, vote, pillEl) {
     }
 
     const provider = requirePhantomOrDeepLink();
+
+    // ✅ new: fetch one-time nonce before signing (prevents replay)
+    const nonce = await getNonce("vote");
+
     const today = new Date().toISOString().slice(0, 10);
-    const message = `COM COIN vote | ${cardId} | ${vote} | ${today}`;
+    const message = `COM COIN|vote|${siteOrigin()}|${cardId}|${vote}|${today}|${nonce}`;
 
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
@@ -782,7 +808,7 @@ async function voteCard(cardId, vote, pillEl) {
     const res = await fetch("/api/vote", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId, vote, pubkey: publicKeyBase58, message, signature })
+      body: JSON.stringify({ cardId, vote, pubkey: publicKeyBase58, message, signature, nonce })
     });
 
     const text = await res.text();

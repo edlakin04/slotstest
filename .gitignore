@@ -1,4 +1,15 @@
-node_modules
+# deps
+node_modules/
+
+# env (secrets)
 .env
-.env.local
+.env.*
+!.env.example
+
+# vercel local project stuff
+.vercel/
 .vercel
+
+# OS junk
+.DS_Store
+Thumbs.db

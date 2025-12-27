@@ -1,3 +1,5 @@
+// api/vote.js
+
 import { j, readJson, verifyPhantomSign, sql, requireEnv } from "./_lib.js";
 
 function utcDayString() {
@@ -5,11 +7,56 @@ function utcDayString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function getIp(req) {
+  const xf = req.headers["x-forwarded-for"];
+  if (typeof xf === "string" && xf.length) return xf.split(",")[0].trim();
+  const xr = req.headers["x-real-ip"];
+  if (typeof xr === "string" && xr.length) return xr.trim();
+  return req.socket?.remoteAddress || "unknown";
+}
+
+// ✅ IP rate limit using your existing ip_rate_limits table
+// We prefix the IP so vote limits don't collide with generate limits.
+async function enforceIpRateLimitOrThrow(ip, { limitPerMinute = 30, prefix = "vote:" } = {}) {
+  // Basic sanity
+  if (typeof ip !== "string" || !ip.trim() || ip.length > 200) {
+    const err = new Error("Bad request");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const scopedIp = `${prefix}${ip}`;
+
+  const rows = await sql`
+    insert into ip_rate_limits (ip, bucket_utc, hits)
+    values (
+      ${scopedIp},
+      date_trunc('minute', (now() at time zone 'utc')),
+      1
+    )
+    on conflict (ip, bucket_utc)
+    do update set hits = ip_rate_limits.hits + 1
+    returning hits
+  `;
+
+  const hits = Number(rows?.[0]?.hits ?? 0);
+  if (hits > limitPerMinute) {
+    const err = new Error("Rate limited");
+    err.statusCode = 429;
+    throw err;
+  }
+}
+
 export default async function handler(req, res) {
   try {
     requireEnv("NEON_DATABASE_URL");
 
     if (req.method !== "POST") return j(res, 405, { error: "Method not allowed" });
+
+    // ✅ IP rate limit (vote spam protection)
+    // Tune this number as you like. 30/minute per IP is a common safe default.
+    const ip = getIp(req);
+    await enforceIpRateLimitOrThrow(ip, { limitPerMinute: 30, prefix: "vote:" });
 
     const body = await readJson(req);
     const { cardId, vote, pubkey, message, signature } = body || {};
@@ -89,6 +136,16 @@ export default async function handler(req, res) {
       throw e;
     }
   } catch (e) {
-    return j(res, 500, { error: String(e?.message || e) });
+    const status = Number(e?.statusCode || 500);
+
+    // ✅ Don't leak internals
+    const msg =
+      status === 400 ? (e?.message || "Bad request") :
+      status === 401 ? "Unauthorized" :
+      status === 413 ? "Request too large" :
+      status === 429 ? "Rate limited" :
+      "Server error";
+
+    return j(res, status, { error: msg });
   }
 }

@@ -1,15 +1,12 @@
-# deps
-node_modules/
+node_modules
+.vercel
 
-# env (secrets)
 .env
 .env.*
 !.env.example
 
-# vercel local project stuff
-.vercel/
-.vercel
-
-# OS junk
 .DS_Store
-Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
